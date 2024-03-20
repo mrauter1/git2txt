@@ -1,70 +1,145 @@
-from pydotenvs import load_env
+from dotenv import load_dotenv
 import os
-import hashlib
 import sys
-load_env()
 
+# Load environment variables
+load_dotenv()
 
-def ignore_dir(file_path: str) -> bool:
-    for _dir in IGNORE_DIRS:
-        if _dir in file_path:
+def get_language_from_extension(file_path: str) -> str:
+    # Mapping of file extensions to Markdown code block language identifiers
+    extension_to_language = {
+        '.py': 'python',
+        '.js': 'javascript',
+        '.html': 'html',
+        '.css': 'css',
+        '.java': 'java',
+        '.cpp': 'cpp',
+        '.c': 'c',
+        '.cs': 'csharp',
+        '.rb': 'ruby',
+        '.php': 'php',
+        '.ts': 'typescript',
+        '.json': 'json',
+        '.md': 'markdown',
+        '.xml': 'xml',
+        '.sh': 'bash',
+    }
+    _, extension = os.path.splitext(file_path)
+    return extension_to_language.get(extension, 'text')
+
+def build_tree(directory, padding, tree_dict, ignore_dirs):
+    items = os.listdir(directory)
+    items.sort()  # Sort the items to have a consistent order
+    for item in items:
+        path = os.path.join(directory, item)
+        if os.path.isdir(path) and not ignore_dir(path, ignore_dirs, directory):
+            tree_dict[item] = {'path': path, 'is_dir': True, 'children': {}}
+            build_tree(path, padding + "    ", tree_dict[item]['children'], ignore_dirs)
+        elif not os.path.isdir(path):
+            tree_dict[item] = {'path': path, 'is_dir': False}
+
+def format_tree(tree_dict, padding=''):
+    lines = ''
+    last_item = list(tree_dict.keys())[-1] if tree_dict else None  # Identify the last item for correct piping
+    for name, node in tree_dict.items():
+        connector = '└──' if name == last_item else '├──'
+        if node['is_dir']:
+            lines += f"{padding}{connector} {name}/\n"
+            lines += format_tree(node['children'], padding + ("    " if name == last_item else "│   "))
+        else:
+            lines += f"{padding}{connector} {name}\n"
+    return lines
+
+def write_tree_to_file(directory, output_file_path, ignore_dirs):
+    tree_dict = {}
+    build_tree(directory, '', tree_dict, ignore_dirs)  # pass the correct directory path
+    tree_str = format_tree(tree_dict)
+    with open(output_file_path, 'w', encoding='utf-8') as output_file:  # open with 'w' to write the tree
+        output_file.write(tree_str.rstrip('\r\n') + '\n\n')  # write the tree followed by two newlines
+
+def append_to_file_markdown_style(relative_path: str, file_content: str, output_file) -> None:
+    language = get_language_from_extension(relative_path)
+    # Write the header with the relative path and the file content wrapped in a code block
+    output_file.write(f"# File: {relative_path}\n```{language}\n{file_content}\n```\n# End of file: {relative_path}\n\n")
+
+def ignore_dir(dir_path: str, ignore_dirs: list, git_path: str) -> bool:
+    # Convert dir_path to an absolute path for comparison
+    dir_path_abs = os.path.abspath(dir_path)
+    for _dir in ignore_dirs:
+        # Construct the absolute path for the ignored directory
+        _dir_abs = os.path.abspath(os.path.join(git_path, _dir))
+        # Check if dir_path_abs starts with the constructed absolute ignored directory
+
+        if dir_path_abs.startswith(_dir_abs):
             return True
     return False
 
+def append_to_single_file(file_path: str, git_path: str, output_file_path: str, skip_empty_files: bool) -> None:
+    # Check if the file is empty and should be skipped
+    if skip_empty_files and os.path.getsize(file_path) == 0:
+        print(f'Skipping empty file: {file_path}')
+        return
+    
+    # Determine the relative path of the file to use as a header
+    relative_path = os.path.relpath(file_path, start=git_path)
+    
+    # Try to read the file with UTF-8 encoding, skip if it fails
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            file_content = f.read()
+    except UnicodeDecodeError:
+        print(f'Warning: Could not decode {file_path}. Skipping file.')
+        return
+    
+    # Open the output file and append the content
+    with open(output_file_path, 'a', encoding='utf-8') as output_file:
+        append_to_file_markdown_style(relative_path, file_content, output_file)
 
-def get_file_path() -> None:
+def process_files(git_path: str, ignore_files: list, ignore_dirs: list, output_file_path: str, skip_empty_files: bool) -> None:
     for root, dirs, files in os.walk(git_path, topdown=True):
+        # Apply filtering on the directories
+        dirs[:] = [d for d in dirs if not ignore_dir(os.path.join(root, d), ignore_dirs, git_path)]
+
         for file in files:
             full_path = os.path.join(root, file)
-            if os.path.basename(full_path) in IGNORE_FILES:
+            if os.path.basename(full_path) in ignore_files:
                 continue
-            if ignore_dir(full_path):
+            # Check if file's parent dir is to be ignored, continue if true
+            if any(ignore_dir(os.path.join(root, d), ignore_dirs, git_path) for d in dirs):
                 continue
-            FILES.append(full_path)
+            append_to_single_file(full_path, git_path, output_file_path, skip_empty_files)
 
+def main():
+    ignore_files = os.environ.get('IGNORE_FILES', '').split(',')
+    ignore_dirs = os.environ.get('IGNORE_DIRS', '').split(',')
 
-def write_txt(txt_data: str, file_name: str, md5_hash: str) -> None:
-    full_path = os.path.join(save_directory, file_name + f'_{md5_hash}.txt')
-    with open(full_path, mode='w') as data:
-        data.write(txt_data)
-    print(f'TXT written to: {full_path}')
+    skip_empty_files = os.environ.get('SKIP_EMPTY_FILES', 'false').upper() == 'TRUE'
 
-
-def main() -> None:
-    # Get files from git repo
-    get_file_path()
-    # Verify if files were found
-    if len(FILES) == 0:
-        print(f"No files found in in git directory: {os.environ.get('GIT_PROJECT_DIRECTORY')}")
-        sys.exit(1)
-    print(f'File count: {len(FILES)}')
-    # Build TXT
-    print('Creating TXT...')
-    for index, file in enumerate(FILES):
-        print(f'File #{index+1}: {file}')
-        # If line is empty, skip it
-        if os.environ.get('SKIP_EMPTY_FILES').upper() == 'TRUE' and os.path.getsize(file) == 0:
-            print('FILE IS EMPTY. SKIPPING.')
-            continue
-        with open(file, mode='r', encoding='utf-8') as git_file:
-            md5_hash = hashlib.md5(git_file.read().encode('utf-8')).hexdigest()
-            git_file.seek(0)
-            file_name = os.path.basename(file)
-            write_txt(txt_data=git_file.read(), file_name=file_name, md5_hash=md5_hash)
-
-
-
-if __name__ == '__main__':
-    FILES = []
-    IGNORE_FILES = os.environ.get('IGNORE_FILES').split(',')
-    IGNORE_DIRS = os.environ.get('IGNORE_DIRS').split(',')
-    PROJECT_NAME = os.path.basename(os.environ.get("GIT_PROJECT_DIRECTORY"))
-
-    git_path = os.environ.get('GIT_PROJECT_DIRECTORY')
+    # Determine git_path either from environment variable or command-line argument
+    git_path = os.environ.get('GIT_PROJECT_DIRECTORY', '')
+    if '-path' in sys.argv:
+        path_index = sys.argv.index('-path') + 1
+        if path_index < len(sys.argv):
+            git_path = sys.argv[path_index]
     if not os.path.isdir(git_path):
-        raise FileNotFoundError('GIT_PROJECT_DIRECTORY not found or not a directory.')
-    save_directory = os.environ.get('SAVE_DIRECTORY')
+        print(f'Path not found or not a directory: {git_path}')
+        sys.exit(1)
+
+    save_directory = os.environ.get('SAVE_DIRECTORY', '.')
     if not os.path.isdir(save_directory):
         os.makedirs(save_directory, exist_ok=True)
+
+    output_file_name = os.path.basename(git_path.rstrip(os.sep)) + '.md'
+    output_file_path = os.path.join(save_directory, output_file_name)
+
+    # Ensure the output file is empty at the start
+    if os.path.exists(output_file_path):
+        os.remove(output_file_path)
+
+    write_tree_to_file(git_path, output_file_path, ignore_dirs)  # add the ignore_dirs parameter
+    process_files(git_path, ignore_files, ignore_dirs, output_file_path, skip_empty_files)
+
+    print(f"All contents have been written to: {output_file_path}")
+
+if __name__ == '__main__':
     main()
-    print(f'Training data can be found in {save_directory}/ directory.')
