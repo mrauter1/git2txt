@@ -1,3 +1,4 @@
+# main.py
 from dotenv import load_dotenv
 import os
 import sys
@@ -195,73 +196,14 @@ def main():
     if os.path.exists(output_file_path):
         os.remove(output_file_path)
 
-    include_files = [
-        "main.py",
-        "backend/server.py",
-        "backend/utils.py",
-        "gpt_researcher/__init__.py",
-        "gpt_researcher/config/config.py",
-        "gpt_researcher/config/__init__.py",
-        "gpt_researcher/context/compression.py",
-        "gpt_researcher/context/retriever.py",
-        "gpt_researcher/context/__init__.py",
-        "gpt_researcher/master/agent.py",
-        "gpt_researcher/master/functions.py",
-        "gpt_researcher/master/prompts.py",
-        "gpt_researcher/master/__init__.py",
-        "gpt_researcher/memory/embeddings.py",
-        "gpt_researcher/memory/__init__.py",
-        "gpt_researcher/retrievers/__init__.py",
-        "gpt_researcher/retrievers/bing/bing.py",
-        "gpt_researcher/retrievers/duckduckgo/duckduckgo.py",
-        "gpt_researcher/retrievers/google/google.py",
-        "gpt_researcher/retrievers/searx/searx.py",
-        "gpt_researcher/retrievers/serpapi/serpapi.py",
-        "gpt_researcher/retrievers/serper/serper.py",
-        "gpt_researcher/retrievers/tavily_news/tavily_news.py",
-        "gpt_researcher/retrievers/tavily_search/tavily_search.py",
-        "gpt_researcher/scraper/scraper.py",
-        "gpt_researcher/scraper/__init__.py",
-        "gpt_researcher/scraper/arxiv/arxiv.py",
-        "gpt_researcher/scraper/beautiful_soup/beautiful_soup.py",
-        "gpt_researcher/scraper/newspaper/newspaper.py",
-        "gpt_researcher/scraper/pymupdf/pymupdf.py",
-        "gpt_researcher/scraper/web_base_loader/web_base_loader.py",
-        "gpt_researcher/utils/llm.py",
-        "gpt_researcher/utils/websocket_manager.py",
-        "docs/docusaurus.config.js",
-        "docs/sidebars.js",
-        "docs/docs/welcome.md",
-        "docs/docs/faq.md",
-        "docs/docs/contribute.md",
-        "docs/docs/gpt-researcher/introduction.md",
-        "docs/docs/gpt-researcher/getting-started.md",
-        "docs/docs/gpt-researcher/config.md",
-        "docs/docs/gpt-researcher/example.md",
-        "docs/docs/gpt-researcher/agent_frameworks.md",
-        "docs/docs/gpt-researcher/pip-package.md",
-        "docs/docs/gpt-researcher/troubleshooting.md",
-        "docs/docs/tavily-api/introduction.md",
-        "docs/docs/tavily-api/python-sdk.md",
-        "docs/docs/tavily-api/rest_api.md",
-        "docs/docs/tavily-api/langchain.md",
-        "docs/docs/tavily-api/llamaindex.md",
-        "docs/docs/tavily-api/Topics/01-introduction.md",
-        "docs/docs/tavily-api/Topics/code.md",
-        "docs/docs/tavily-api/Topics/finance.md",
-        "docs/docs/tavily-api/Topics/news.md",
-        "docs/docs/tavily-api/Topics/people.md",
-        "docs/docs/reference/sidebar.json",
-        "docs/docs/reference/config/config.md",
-        "docs/docs/reference/config/singleton.md",
-        "docs/docs/reference/processing/html.md",
-        "docs/docs/reference/processing/text.md"
-        ]
-    write_tree_to_file_with_included_files(git_path, output_file_path, include_files)
-    process_files(git_path, output_file_path, skip_empty_files, include_files)
+#    include_files = [
+        # "main.py",
+        # ]
+    # write_tree_to_file_with_included_files(git_path, output_file_path, include_files)
+    # process_files(git_path, output_file_path, skip_empty_files, include_files)
 
-#    write_tree_to_file(git_path, output_file_path, ignore_dirs)  # add the ignore_dirs parameter
-#    process_path(git_path, ignore_files, ignore_dirs, output_file_path, skip_empty_files)
+    write_tree_to_file(git_path, output_file_path, ignore_dirs)  # add the ignore_dirs parameter
+    process_path(git_path, ignore_files, ignore_dirs, output_file_path, skip_empty_files)
 
     print(f"All contents have been written to: {output_file_path}")
 
