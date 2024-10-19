@@ -5,6 +5,7 @@ import argparse
 import glob
 import fnmatch
 import subprocess
+import io  # Added to handle in-memory text streams
 
 def get_language_from_extension(file_path: str) -> str:
     # Mapping of file extensions to Markdown code block language identifiers
@@ -46,11 +47,10 @@ def build_tree_from_included_files(include_files: list, git_path: str) -> dict:
 
     return tree_dict
 
-def write_tree_to_file_with_included_files(git_path: str, output_file_path: str, include_files: list):
+def write_tree_to_file_with_included_files(git_path: str, output_handle, include_files: list):
     tree_dict = build_tree_from_included_files(include_files, git_path)
     tree_str = format_tree(tree_dict)
-    with open(output_file_path, 'w', encoding='utf-8') as output_file:
-        output_file.write(tree_str.rstrip('\r\n') + '\n\n')
+    output_handle.write(tree_str.rstrip('\r\n') + '\n\n')
 
 def build_tree(directory, padding, tree_dict, ignore_dirs, git_path):
     items = os.listdir(directory)
@@ -65,27 +65,29 @@ def build_tree(directory, padding, tree_dict, ignore_dirs, git_path):
 
 def format_tree(tree_dict, padding=''):
     lines = ''
-    last_item = list(tree_dict.keys())[-1] if tree_dict else None  # Identify the last item for correct piping
-    for name, node in tree_dict.items():
-        connector = '└──' if name == last_item else '├──'
+    if not tree_dict:
+        return lines
+    last_index = len(tree_dict) - 1
+    for index, (name, node) in enumerate(tree_dict.items()):
+        connector = '└──' if index == last_index else '├──'
         if node['is_dir']:
             lines += f"{padding}{connector} {name}/\n"
-            lines += format_tree(node['children'], padding + ("    " if name == last_item else "│   "))
+            new_padding = padding + ("    " if index == last_index else "│   ")
+            lines += format_tree(node['children'], new_padding)
         else:
             lines += f"{padding}{connector} {name}\n"
     return lines
 
-def write_tree_to_file(directory, output_file_path, ignore_dirs):
+def write_tree_to_file(directory, output_handle, ignore_dirs):
     tree_dict = {}
     build_tree(directory, '', tree_dict, ignore_dirs, directory)  # pass the correct directory path
     tree_str = format_tree(tree_dict)
-    with open(output_file_path, 'w', encoding='utf-8') as output_file:  # open with 'w' to write the tree
-        output_file.write(tree_str.rstrip('\r\n') + '\n\n')  # write the tree followed by two newlines
+    output_handle.write(tree_str.rstrip('\r\n') + '\n\n')  # write the tree followed by two newlines
 
-def append_to_file_markdown_style(relative_path: str, file_content: str, output_file) -> None:
+def append_to_file_markdown_style(relative_path: str, file_content: str, output_handle) -> None:
     language = get_language_from_extension(relative_path)
     # Write the header with the relative path and the file content wrapped in a code block
-    output_file.write(f"# File: {relative_path}\n```{language}\n{file_content}\n```\n# End of file: {relative_path}\n\n")
+    output_handle.write(f"# File: {relative_path}\n```{language}\n{file_content}\n```\n# End of file: {relative_path}\n\n")
 
 def ignore_dir(dir_path: str, ignore_dirs: list, git_path: str) -> bool:
     relative_path = os.path.relpath(dir_path, git_path)
@@ -101,7 +103,7 @@ def ignore_file(file_path: str, ignore_files: list, git_path: str) -> bool:
             return True
     return False
 
-def append_to_single_file(file_path: str, git_path: str, output_file_path: str, skip_empty_files: bool) -> None:
+def append_to_single_file(file_path: str, git_path: str, output_handle, skip_empty_files: bool) -> None:
     # Check if the file is empty and should be skipped
     if skip_empty_files and os.path.getsize(file_path) == 0:
         print(f'Skipping empty file: {file_path}')
@@ -118,11 +120,10 @@ def append_to_single_file(file_path: str, git_path: str, output_file_path: str, 
         print(f'Warning: Could not decode {file_path}. Skipping file.')
         return
 
-    # Open the output file and append the content
-    with open(output_file_path, 'a', encoding='utf-8') as output_file:
-        append_to_file_markdown_style(relative_path, file_content, output_file)
+    # Append the content in Markdown style
+    append_to_file_markdown_style(relative_path, file_content, output_handle)
 
-def process_path(git_path: str, ignore_files: list, ignore_dirs: list, output_file_path: str, skip_empty_files: bool) -> None:
+def process_path(git_path: str, ignore_files: list, ignore_dirs: list, output_handle, skip_empty_files: bool) -> None:
     for root, dirs, files in os.walk(git_path, topdown=True):
         # Apply filtering on the directories
         dirs[:] = [d for d in dirs if not ignore_dir(os.path.join(root, d), ignore_dirs, git_path)]
@@ -132,9 +133,9 @@ def process_path(git_path: str, ignore_files: list, ignore_dirs: list, output_fi
             if ignore_file(full_path, ignore_files, git_path):
                 print(f'Skipping ignored file: {file}')
                 continue
-            append_to_single_file(full_path, git_path, output_file_path, skip_empty_files)
+            append_to_single_file(full_path, git_path, output_handle, skip_empty_files)
 
-def process_files(git_path: str, output_file_path: str, skip_empty_files: bool, include_files: list) -> None:
+def process_files(git_path: str, output_handle, skip_empty_files: bool, include_files: list) -> None:
     for relative_path in include_files:
         full_path = os.path.join(git_path, relative_path.replace('/', os.sep))  # Ensure platform compatibility
 
@@ -153,11 +154,34 @@ def process_files(git_path: str, output_file_path: str, skip_empty_files: bool, 
             print(f'Warning: Could not decode {relative_path}. Skipping file.')
             continue
 
-        # Open the output file and append the content
-        with open(output_file_path, 'a', encoding='utf-8') as output_file:
-            append_to_file_markdown_style(relative_path, file_content, output_file)
+        # Append the content in Markdown style
+        append_to_file_markdown_style(relative_path, file_content, output_handle)
             
-def copy_to_clipboard(output_file_path: str) -> None:
+def copy_to_clipboard_content(content: str) -> None:
+    """Copy the given content to the clipboard."""
+    if sys.platform == "win32":
+        # On Windows, use the clip command with UTF-16LE encoding
+        process = subprocess.Popen('clip', stdin=subprocess.PIPE, shell=True)
+        process.communicate(input=content.encode('utf-16le'))
+    elif sys.platform == "darwin":
+        # On macOS, use the pbcopy command with UTF-8 encoding
+        process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
+        process.communicate(input=content.encode('utf-8'))
+    elif sys.platform.startswith("linux"):
+        # On Linux, try xclip or xsel
+        try:
+            process = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+            process.communicate(input=content.encode('utf-8'))
+        except FileNotFoundError:
+            try:
+                process = subprocess.Popen(['xsel', '--clipboard', '--input'], stdin=subprocess.PIPE)
+                process.communicate(input=content.encode('utf-8'))
+            except FileNotFoundError:
+                print("Clipboard functionality requires 'xclip' or 'xsel' to be installed on Linux.")
+    else:
+        print(f"Clipboard functionality is not supported on {sys.platform}.")
+
+def copy_to_clipboard_file(output_file_path: str) -> None:
     """Copy the content of the output file to the clipboard."""
     if sys.platform == "win32":
         # On Windows, use the clip command with UTF-16LE encoding
@@ -172,6 +196,21 @@ def copy_to_clipboard(output_file_path: str) -> None:
             content = file.read()
             process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
             process.communicate(input=content.encode('utf-8'))
+    elif sys.platform.startswith("linux"):
+        # On Linux, try xclip or xsel
+        try:
+            with open(output_file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+                process = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+                process.communicate(input=content.encode('utf-8'))
+        except FileNotFoundError:
+            try:
+                with open(output_file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+                    process = subprocess.Popen(['xsel', '--clipboard', '--input'], stdin=subprocess.PIPE)
+                    process.communicate(input=content.encode('utf-8'))
+            except FileNotFoundError:
+                print("Clipboard functionality requires 'xclip' or 'xsel' to be installed on Linux.")
     else:
         print(f"Clipboard functionality is not supported on {sys.platform}.")
 
@@ -192,47 +231,75 @@ def main():
         print(f'Path not found or not a directory: {git_path}')
         sys.exit(1)
 
+    output_file_provided = False
     if args.output:
+        output_file_provided = True
         output_file_path = args.output
     else:
-        output_file_name = os.path.basename(git_path.rstrip(os.sep)) + '.md'
-        output_file_path = os.path.join('.', 'output', output_file_name)
-
-    output_dir = os.path.dirname(output_file_path)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-
-    # Ensure the output file is empty at the start
-    if os.path.exists(output_file_path):
-        os.remove(output_file_path)
+        output_file_path = None  # No output file by default
 
     ignore_files = args.ignore_files if args.ignore_files is not None else []
     ignore_dirs = args.ignore_dirs if args.ignore_dirs is not None else []
     include_files = args.include_files if args.include_files is not None else None
     skip_empty_files = args.skip_empty_files
 
-    if include_files is not None:
-        # Use glob to expand patterns
-        expanded_include_files = []
-        for pattern in include_files:
-            matched_files = glob.glob(os.path.join(git_path, pattern), recursive=True)
-            expanded_include_files.extend([os.path.relpath(f, git_path) for f in matched_files if os.path.isfile(f)])
-        include_files = expanded_include_files
+    # Determine the writing mode based on whether an output file is provided
+    if output_file_path:
+        # Ensure the output directory exists
+        output_dir = os.path.dirname(output_file_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
 
-        # Since include_files is specified, ignore ignore_files and ignore_dirs flags
-        write_tree_to_file_with_included_files(git_path, output_file_path, include_files)
-        process_files(git_path, output_file_path, skip_empty_files, include_files)
-    else:
-        # Use ignore patterns
-        write_tree_to_file(git_path, output_file_path, ignore_dirs)
-        process_path(git_path, ignore_files, ignore_dirs, output_file_path, skip_empty_files)
+        # Open the output file for writing
+        with open(output_file_path, 'w', encoding='utf-8') as output_file:
+            if include_files is not None:
+                # Use glob to expand patterns
+                expanded_include_files = []
+                for pattern in include_files:
+                    matched_files = glob.glob(os.path.join(git_path, pattern), recursive=True)
+                    expanded_include_files.extend([os.path.relpath(f, git_path) for f in matched_files if os.path.isfile(f)])
+                include_files = expanded_include_files
+
+                # Since include_files is specified, ignore ignore_files and ignore_dirs flags
+                write_tree_to_file_with_included_files(git_path, output_file, include_files)
+                process_files(git_path, output_file, skip_empty_files, include_files)
+            else:
+                # Use ignore patterns
+                write_tree_to_file(git_path, output_file, ignore_dirs)
+                process_path(git_path, ignore_files, ignore_dirs, output_file, skip_empty_files)
+
+        # If the flag --clipboard is set, copy the output to the clipboard
+        if args.clipboard:
+            copy_to_clipboard_file(output_file_path)
+            print(f"The content of {output_file_path} has been copied to the clipboard.")
         
-    # If the flag --clipboard is set, copy the output to the clipboard
-    if args.clipboard:
-        copy_to_clipboard(output_file_path)
-        print(f"The content of {output_file_path} has been copied to the clipboard.")        
+        print(f"All contents have been written to: {output_file_path}")
+    else:
+        # No output file provided; collect content in-memory and copy to clipboard by default
+        output_buffer = io.StringIO()
+        if include_files is not None:
+            # Use glob to expand patterns
+            expanded_include_files = []
+            for pattern in include_files:
+                matched_files = glob.glob(os.path.join(git_path, pattern), recursive=True)
+                expanded_include_files.extend([os.path.relpath(f, git_path) for f in matched_files if os.path.isfile(f)])
+            include_files = expanded_include_files
 
-    print(f"All contents have been written to: {output_file_path}")
+            # Since include_files is specified, ignore ignore_files and ignore_dirs flags
+            write_tree_to_file_with_included_files(git_path, output_buffer, include_files)
+            process_files(git_path, output_buffer, skip_empty_files, include_files)
+        else:
+            # Use ignore patterns
+            write_tree_to_file(git_path, output_buffer, ignore_dirs)
+            process_path(git_path, ignore_files, ignore_dirs, output_buffer, skip_empty_files)
+
+        # Get the content from the buffer
+        content = output_buffer.getvalue()
+        output_buffer.close()
+
+        # Copy the content to the clipboard
+        copy_to_clipboard_content(content)
+        print("The content has been copied to the clipboard.")
 
 if __name__ == '__main__':
     main()
