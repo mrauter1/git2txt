@@ -6,6 +6,10 @@ import glob
 import fnmatch
 import subprocess
 import io  # To handle in-memory text streams
+import tempfile
+import shutil
+import stat  # For handling file permissions on Windows
+
 try:
     import pathspec  # For parsing .gitignore files
 except ImportError:
@@ -199,10 +203,32 @@ def copy_to_clipboard_file(output_file_path: str) -> None:
         content = file.read()
     copy_to_clipboard_content(content)
 
+def is_git_url(path: str) -> bool:
+    """Check if the given path is a git URL."""
+    git_url_prefixes = ['http://', 'https://', 'git@', 'ssh://', 'git://']
+    return any(path.startswith(prefix) for prefix in git_url_prefixes)
+
+def on_rm_error(func, path, exc_info):
+    """
+    Error handler for shutil.rmtree.
+
+    If the error is due to an access error (read-only file),
+    it attempts to add write permission and then retries.
+
+    If the error is for another reason, it re-raises the error.
+    """
+    import errno
+    if not os.access(path, os.W_OK):
+        # Attempt to add write permission and retry
+        os.chmod(path, stat.S_IWUSR)
+        func(path)
+    else:
+        raise
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Process some files and directories.')
-    parser.add_argument('path', help='Path to the git project directory.')
+    parser.add_argument('path', help='Path to the git project directory or a git repository URL.')
     parser.add_argument('-o', '--output', help='Output file path.')
     parser.add_argument('-if', '--ignore-files', nargs='*', help='List of files to ignore (supports glob patterns).')
     parser.add_argument('-id', '--ignore-dirs', nargs='*', help='List of directories to ignore (supports glob patterns).')
@@ -213,45 +239,89 @@ def main():
     args = parser.parse_args()
 
     git_path = args.path
-    if not os.path.isdir(git_path):
-        print(f'Path not found or not a directory: {git_path}')
-        sys.exit(1)
+    temp_dir = None  # To keep track if we need to clean up a temp directory
 
-    output_file_provided = False
-    if args.output:
-        output_file_provided = True
-        output_file_path = args.output
-    else:
-        output_file_path = None  # No output file by default
-
-    ignore_files = args.ignore_files if args.ignore_files is not None else []
-    ignore_dirs = args.ignore_dirs if args.ignore_dirs is not None else []
-    include_files = args.include_files if args.include_files is not None else None
-    skip_empty_files = args.skip_empty_files
-
-    gitignore_spec = None
-    if args.gitignore:
-        if pathspec is None:
-            print("Error: 'pathspec' module is required to use the --gitignore option.")
-            print("Install it using 'pip install pathspec'")
-            sys.exit(1)
-        gitignore_path = os.path.join(git_path, '.gitignore')
-        if os.path.exists(gitignore_path):
-            with open(gitignore_path, 'r') as f:
-                gitignore_patterns = f.read().splitlines()
-                gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
+    try:
+        # Check if git_path is a directory
+        if os.path.isdir(git_path):
+            # Proceed as before
+            pass
         else:
-            print(f'Warning: .gitignore file not found in {git_path}')
+            # Not a directory; check if it's a git URL
+            if is_git_url(git_path):
+                # Clone the repository to a temporary directory
+                temp_dir = tempfile.mkdtemp()
+                clone_cmd = ['git', 'clone', git_path, temp_dir]
+                try:
+                    subprocess.check_call(clone_cmd)
+                    git_path = temp_dir
+                except subprocess.CalledProcessError as e:
+                    print(f'Error cloning repository: {e}')
+                    sys.exit(1)
+            else:
+                print(f'Path not found or not a directory or a git URL: {git_path}')
+                sys.exit(1)
 
-    # Determine the writing mode based on whether an output file is provided
-    if output_file_path:
-        # Ensure the output directory exists
-        output_dir = os.path.dirname(output_file_path)
-        if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
+        output_file_provided = False
+        if args.output:
+            output_file_provided = True
+            output_file_path = args.output
+        else:
+            output_file_path = None  # No output file by default
 
-        # Open the output file for writing
-        with open(output_file_path, 'w', encoding='utf-8') as output_file:
+        ignore_files = args.ignore_files if args.ignore_files is not None else []
+        ignore_dirs = args.ignore_dirs if args.ignore_dirs is not None else []
+        include_files = args.include_files if args.include_files is not None else None
+        skip_empty_files = args.skip_empty_files
+
+        gitignore_spec = None
+        if args.gitignore:
+            if pathspec is None:
+                print("Error: 'pathspec' module is required to use the --gitignore option.")
+                print("Install it using 'pip install pathspec'")
+                sys.exit(1)
+            gitignore_path = os.path.join(git_path, '.gitignore')
+            if os.path.exists(gitignore_path):
+                with open(gitignore_path, 'r') as f:
+                    gitignore_patterns = f.read().splitlines()
+                    gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
+            else:
+                print(f'Warning: .gitignore file not found in {git_path}')
+
+        # Determine the writing mode based on whether an output file is provided
+        if output_file_path:
+            # Ensure the output directory exists
+            output_dir = os.path.dirname(output_file_path)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+
+            # Open the output file for writing
+            with open(output_file_path, 'w', encoding='utf-8') as output_file:
+                if include_files is not None:
+                    # Use glob to expand patterns
+                    expanded_include_files = []
+                    for pattern in include_files:
+                        matched_files = glob.glob(os.path.join(git_path, pattern), recursive=True)
+                        expanded_include_files.extend([os.path.relpath(f, git_path) for f in matched_files if os.path.isfile(f)])
+                    include_files = expanded_include_files
+
+                    # Since include_files is specified, ignore ignore_files and ignore_dirs flags
+                    write_tree_to_file_with_included_files(git_path, output_file, include_files)
+                    process_files(git_path, output_file, skip_empty_files, include_files)
+                else:
+                    # Use ignore patterns
+                    write_tree_to_file(git_path, output_file, ignore_dirs, gitignore_spec)
+                    process_path(git_path, ignore_files, ignore_dirs, output_file, skip_empty_files, gitignore_spec)
+
+            # If the flag --clipboard is set, copy the output to the clipboard
+            if args.clipboard:
+                copy_to_clipboard_file(output_file_path)
+                print(f"The content of {output_file_path} has been copied to the clipboard.")
+            
+            print(f"All contents have been written to: {output_file_path}")
+        else:
+            # No output file provided; collect content in-memory and copy to clipboard by default
+            output_buffer = io.StringIO()
             if include_files is not None:
                 # Use glob to expand patterns
                 expanded_include_files = []
@@ -261,45 +331,24 @@ def main():
                 include_files = expanded_include_files
 
                 # Since include_files is specified, ignore ignore_files and ignore_dirs flags
-                write_tree_to_file_with_included_files(git_path, output_file, include_files)
-                process_files(git_path, output_file, skip_empty_files, include_files)
+                write_tree_to_file_with_included_files(git_path, output_buffer, include_files)
+                process_files(git_path, output_buffer, skip_empty_files, include_files)
             else:
                 # Use ignore patterns
-                write_tree_to_file(git_path, output_file, ignore_dirs, gitignore_spec)
-                process_path(git_path, ignore_files, ignore_dirs, output_file, skip_empty_files, gitignore_spec)
+                write_tree_to_file(git_path, output_buffer, ignore_dirs, gitignore_spec)
+                process_path(git_path, ignore_files, ignore_dirs, output_buffer, skip_empty_files, gitignore_spec)
 
-        # If the flag --clipboard is set, copy the output to the clipboard
-        if args.clipboard:
-            copy_to_clipboard_file(output_file_path)
-            print(f"The content of {output_file_path} has been copied to the clipboard.")
-        
-        print(f"All contents have been written to: {output_file_path}")
-    else:
-        # No output file provided; collect content in-memory and copy to clipboard by default
-        output_buffer = io.StringIO()
-        if include_files is not None:
-            # Use glob to expand patterns
-            expanded_include_files = []
-            for pattern in include_files:
-                matched_files = glob.glob(os.path.join(git_path, pattern), recursive=True)
-                expanded_include_files.extend([os.path.relpath(f, git_path) for f in matched_files if os.path.isfile(f)])
-            include_files = expanded_include_files
+            # Get the content from the buffer
+            content = output_buffer.getvalue()
+            output_buffer.close()
 
-            # Since include_files is specified, ignore ignore_files and ignore_dirs flags
-            write_tree_to_file_with_included_files(git_path, output_buffer, include_files)
-            process_files(git_path, output_buffer, skip_empty_files, include_files)
-        else:
-            # Use ignore patterns
-            write_tree_to_file(git_path, output_buffer, ignore_dirs, gitignore_spec)
-            process_path(git_path, ignore_files, ignore_dirs, output_buffer, skip_empty_files, gitignore_spec)
-
-        # Get the content from the buffer
-        content = output_buffer.getvalue()
-        output_buffer.close()
-
-        # Copy the content to the clipboard
-        copy_to_clipboard_content(content)
-        print("The content has been copied to the clipboard.")
+            # Copy the content to the clipboard
+            copy_to_clipboard_content(content)
+            print("The content has been copied to the clipboard.")
+    finally:
+        # Clean up the temporary directory if we cloned a repo
+        if temp_dir:
+            shutil.rmtree(temp_dir, onerror=on_rm_error)
 
 if __name__ == '__main__':
     main()
