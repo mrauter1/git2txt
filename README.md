@@ -1,6 +1,6 @@
 # Git2Text - Codebase Extraction Utility
 
-Welcome to **Git2Text**! This utility simplifies the process of extracting and formatting the entire structure of a Git codebase into a single text file. It's perfect for copying and pasting a codebase into ChatGPT or other large language models (LLMs), making your conversations more informative and streamlined.
+Welcome to **Git2Text**! This utility simplifies the process of extracting and formatting the entire structure of a codebase into a single text file. Whether you're working with a Git project or any other codebase, **Git2Text** is perfect for copying and pasting your code into ChatGPT or other large language models (LLMs), making your conversations more informative and streamlined.
 
 The tool provides a structured output of your repository's files along with their content, all in Markdown format, which makes it readable and organized for LLMs. With **Git2Text**, you can avoid the hassle of manually extracting, organizing, and presenting your codebase.
 
@@ -26,11 +26,11 @@ The repository contains the following files:
 
 ### File Descriptions
 
-- **`.gitignore`**: Specifies which files and folders to exclude during extraction.
+- **`.gitignore`**: Specifies which files and folders to exclude during extraction (useful for Git projects).
 - **`RAG prompt example.txt`**: A sample prompt for using the output with LLMs.
 - **`README.md`**: This file, containing the documentation for the project.
 - **`git2text.bat`**: Windows batch script for running `git2text.py` with ease.
-- **`git2text.py`**: The main Python script that processes the Git codebase and generates the Markdown output.
+- **`git2text.py`**: The main Python script that processes the codebase and generates the Markdown output.
 
 ## Prerequisites
 
@@ -58,14 +58,14 @@ You can run the script using either the provided batch file (`git2text.bat`) or 
 #### Option 1: Using Batch File (Windows Only)
 
 1. Double-click `git2text.bat`.
-2. Enter the path to your Git repository when prompted.
+2. Enter the path to your codebase when prompted.
 
 #### Option 2: Using Python
 
 Run the script directly from your terminal or command prompt:
 
 ```bash
-python git2text.py <path-to-your-git-repo> [options]
+python git2text.py <path-to-your-codebase> [options]
 ```
 
 ### Options
@@ -83,7 +83,7 @@ python git2text.py <path-to-your-git-repo> [options]
 #### Extract Entire Codebase to a Markdown File
 
 ```bash
-python git2text.py /path/to/git/repo -o output.md
+python git2text.py /path/to/codebase -o output.md
 ```
 
 This command will generate a `output.md` file containing the entire codebase in a readable Markdown format, including a tree structure representation and the contents of all files.
@@ -91,15 +91,15 @@ This command will generate a `output.md` file containing the entire codebase in 
 #### Extract Only Specific Files and Copy to Clipboard
 
 ```bash
-python git2text.py /path/to/git/repo -inc "*.py" -cp
+python git2text.py /path/to/codebase -inc "*.py" -cp
 ```
 
-This command will extract only Python files (`*.py`) from the specified Git repository and copy the output directly to the clipboard for easy pasting.
+This command will extract only Python files (`*.py`) from the specified codebase and copy the output directly to the clipboard for easy pasting.
 
 #### Use `.gitignore` Rules and Skip Empty Files
 
 ```bash
-python git2text.py /path/to/git/repo -gi -se -o output.md
+python git2text.py /path/to/codebase -gi -se -o output.md
 ```
 
 This command will respect the `.gitignore` rules defined in your repository, skip any empty files, and save the output to `output.md`.
@@ -107,7 +107,7 @@ This command will respect the `.gitignore` rules defined in your repository, ski
 #### Ignore Specific Files and Directories
 
 ```bash
-python git2text.py /path/to/git/repo -if "*.log" -id "__pycache__" -o output.md
+python git2text.py /path/to/codebase -if "*.log" -id "__pycache__" -o output.md
 ```
 
 This command will ignore all `.log` files and the `__pycache__` directory while generating the Markdown output.
@@ -115,7 +115,7 @@ This command will ignore all `.log` files and the `__pycache__` directory while 
 #### Include Only Specific Files
 
 ```bash
-python git2text.py /path/to/git/repo -inc "src/**/*.py" -o output.md
+python git2text.py /path/to/codebase -inc "src/**/*.py" -o output.md
 ```
 
 This command will include only Python files within the `src` directory (including subdirectories) and generate the output to `output.md`.
@@ -123,11 +123,11 @@ This command will include only Python files within the `src` directory (includin
 ## Example Output
 
 The output of **Git2Text** follows a Markdown structure for easy readability. Here's a sample of how it formats the files:
-
+```
 ├── main.py
 ├── folder/
 │   ├── file.json
-
+```
 ```
 # File: main.py
 ```python
