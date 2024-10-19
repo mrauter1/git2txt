@@ -1,145 +1,170 @@
-# Project Tree Markdown Generator
+# Git2Text - Codebase Extraction Utility
 
-This Python script generates a Markdown-formatted tree structure and content of a specified directory. The generated output file can serve as documentation for your codebase, making it easier to navigate and understand the project structure.
+Welcome to **Git2Text**! This utility simplifies the process of extracting and formatting the entire structure of a Git codebase into a single text file. It's perfect for copying and pasting a codebase into ChatGPT or other large language models (LLMs), making your conversations more informative and streamlined.
+
+The tool provides a structured output of your repository's files along with their content, all in Markdown format, which makes it readable and organized for LLMs. With **Git2Text**, you can avoid the hassle of manually extracting, organizing, and presenting your codebase.
 
 ## Features
 
-- Generates a directory tree in Markdown format.
-- Includes the content of the files in Markdown code blocks.
-- Customizable file and directory inclusion or exclusion.
+- **Extract Complete Codebase**: Convert your entire codebase into a Markdown-formatted text.
+- **Tree View Representation**: Automatically generate a directory structure to provide context.
+- **Code Block Formatting**: Files are formatted with appropriate syntax highlighting for better readability.
+- **Easy Copy to Clipboard**: Quickly copy the output for pasting into LLMs like ChatGPT.
+- **Customizable Filtering**: Control which files or directories to include or ignore using `.gitignore` rules or command-line flags.
 
-## Requirements
+## File Overview
 
-- Python 3.6 or later
+The repository contains the following files:
+
+```
+├── .gitignore
+├── RAG prompt example.txt
+├── README.md
+├── git2text.bat
+└── git2text.py
+```
+
+### File Descriptions
+
+- **`.gitignore`**: Specifies which files and folders to exclude during extraction.
+- **`RAG prompt example.txt`**: A sample prompt for using the output with LLMs.
+- **`README.md`**: This file, containing the documentation for the project.
+- **`git2text.bat`**: Windows batch script for running `git2text.py` with ease.
+- **`git2text.py`**: The main Python script that processes the Git codebase and generates the Markdown output.
+
+## Prerequisites
+
+- **Python 3.6+**
+- **Pathspec** library for `.gitignore` parsing (Install via `pip install pathspec`)
 
 ## Installation
 
-Clone this repository to your local machine:
-
-```sh
-$ git clone <repository_url>
-$ cd <repository_folder>
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/git2text.git
+   cd git2text
+   ```
+2. Install dependencies:
+   ```bash
+   pip install pathspec
+   ```
 
 ## Usage
 
-Run the script using Python, specifying the directory to generate the tree for. Optionally, specify the output path, files/directories to include or ignore, and whether to skip empty files.
+### Running the Script
 
-### Basic Usage
+You can run the script using either the provided batch file (`git2text.bat`) or directly through Python.
 
-```sh
-$ python main.py /path/to/your/project
+#### Option 1: Using Batch File (Windows Only)
+
+1. Double-click `git2text.bat`.
+2. Enter the path to your Git repository when prompted.
+
+#### Option 2: Using Python
+
+Run the script directly from your terminal or command prompt:
+
+```bash
+python git2text.py <path-to-your-git-repo> [options]
 ```
 
-This command generates a Markdown file (`project.md`) in the current directory with the tree structure and contents of the specified path.
+### Options
 
-### Specifying an Output File
+- **`-o, --output`**: Specify the output file path.
+- **`-if, --ignore-files`**: List of files to ignore (supports glob patterns).
+- **`-id, --ignore-dirs`**: List of directories to ignore (supports glob patterns).
+- **`-inc, --include-files`**: List of files to include. If specified, only these files will be processed.
+- **`-se, --skip-empty-files`**: Skip empty files during extraction.
+- **`-cp, --clipboard`**: Copy the generated content to the clipboard.
+- **`-gi, --gitignore`**: Use `.gitignore` to determine which files and folders to ignore.
 
-```sh
-$ python main.py /path/to/your/project -o /path/to/output/your_output.md
+### Example Usage
+
+#### Extract Entire Codebase to a Markdown File
+
+```bash
+python git2text.py /path/to/git/repo -o output.md
 ```
 
-This command saves the output to the specified file.
+This command will generate a `output.md` file containing the entire codebase in a readable Markdown format, including a tree structure representation and the contents of all files.
 
-### Ignoring Specific Files and Directories
+#### Extract Only Specific Files and Copy to Clipboard
 
-You can ignore files and directories using glob patterns:
-
-```sh
-$ python main.py /path/to/your/project -if "*.log" "*.tmp" -id "__pycache__" "node_modules"
+```bash
+python git2text.py /path/to/git/repo -inc "*.py" -cp
 ```
 
-This command ignores all `.log` and `.tmp` files and the directories named `__pycache__` and `node_modules`.
+This command will extract only Python files (`*.py`) from the specified Git repository and copy the output directly to the clipboard for easy pasting.
 
-### Including Specific Files Only
+#### Use `.gitignore` Rules and Skip Empty Files
 
-You can also specify which files to include using glob patterns. When you specify `--include-files`, only the specified files will be included:
-
-```sh
-$ python main.py /path/to/your/project -inc "**/*.py" "README.md"
+```bash
+python git2text.py /path/to/git/repo -gi -se -o output.md
 ```
 
-This command only includes Python files and the `README.md` file.
+This command will respect the `.gitignore` rules defined in your repository, skip any empty files, and save the output to `output.md`.
 
-### Skipping Empty Files
+#### Ignore Specific Files and Directories
 
-To skip empty files during processing:
-
-```sh
-$ python main.py /path/to/your/project --skip-empty-files
+```bash
+python git2text.py /path/to/git/repo -if "*.log" -id "__pycache__" -o output.md
 ```
 
-This command will skip empty files when generating the output.
+This command will ignore all `.log` files and the `__pycache__` directory while generating the Markdown output.
 
-## Example
+#### Include Only Specific Files
 
-Suppose you have the following project structure:
-
-```
-project/
-├── src/
-│   ├── main.py
-│   ├── utils.py
-│   └── __init__.py
-├── README.md
-└── requirements.txt
+```bash
+python git2text.py /path/to/git/repo -inc "src/**/*.py" -o output.md
 ```
 
-Running the command:
+This command will include only Python files within the `src` directory (including subdirectories) and generate the output to `output.md`.
 
-```sh
-$ python main.py project
+## Example Output
+
+The output of **Git2Text** follows a Markdown structure for easy readability. Here's a sample of how it formats the files:
+
+├── main.py
+├── folder/
+│   ├── file.json
+
 ```
-
-Would generate a `project.md` file with the following content:
-
-```markdown
-# Tree Structure
-
-```
-project/
-├── src/
-│   ├── main.py
-│   ├── utils.py
-│   └── __init__.py
-├── README.md
-└── requirements.txt
-```
-
-
-# File: src/main.py
+# File: main.py
 ```python
-# Example Python code in main.py
-print("Hello, world!")
+# Sample Python Code
+print("Hello, World!")
 ```
-# End of file: src/main.py
-
-# File: src/utils.py
-```python
-# Utility functions for the project
-def add(a, b):
-    return a + b
+# End of file: main.py
 ```
-# End of file: src/utils.py
-
-...
+# File: folder/file.json
+```json
+{
+    "name": "example"
+}  
 ```
+# End of file: folder/file.json
 
-## Command-Line Options
+This format helps provide syntax-highlighted code blocks, making it much easier for LLMs to understand your code.
 
-- `path` (positional): Path to the project directory.
-- `-o, --output`: Optional output file path. Defaults to `project.md` in the current directory.
-- `-if, --ignore-files`: List of files to ignore (supports glob patterns).
-- `-id, --ignore-dirs`: List of directories to ignore (supports glob patterns).
-- `-inc, --include-files`: List of files to include (supports glob patterns). If specified, only these files will be included.
-- `--skip-empty-files`: Skip empty files.
+## Tips for Using with LLMs
+
+- **Tree Representation**: The directory tree provides context to the LLM on the project structure, making it easier to understand relationships between files.
+- **Comment Your Code**: The better commented your code is, the more context the LLM will have, resulting in better quality responses.
+- **RAG Prompting**: Use the `RAG prompt example.txt` file to guide LLMs on how to interpret and work with your extracted code.
+
+## Contributing
+
+Feel free to contribute to the project by opening an issue or submitting a pull request. We welcome feedback and suggestions to improve **Git2Text**!
 
 ## License
 
 This project is licensed under the MIT License.
 
-## Contributing
+## Contact
 
-Feel free to submit issues, fork the repository, and create pull requests. Any contributions are welcome!
+For any questions or support, please open an issue on the GitHub repository.
 
+---
+
+Happy coding, and enjoy seamless interaction with your favorite LLMs using **Git2Text**! 🚀
 
