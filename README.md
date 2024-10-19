@@ -76,7 +76,7 @@ python git2text.py <path-to-your-codebase> [options]
 - **`-inc, --include-files`**: List of files to include. If specified, only these files will be processed.
 - **`-se, --skip-empty-files`**: Skip empty files during extraction.
 - **`-cp, --clipboard`**: Copy the generated content to the clipboard.
-- **`-gi, --gitignore`**: Use `.gitignore` to determine which files and folders to ignore.
+- **`-igi, --ignoregitignore`**: Ignore the `.gitignore` file when specified.
 
 ### Example Usage
 
@@ -96,13 +96,13 @@ python git2text.py /path/to/codebase -inc "*.py" -cp
 
 This command will extract only Python files (`*.py`) from the specified codebase and copy the output directly to the clipboard for easy pasting.
 
-#### Use `.gitignore` Rules and Skip Empty Files
+#### Skip `.gitignore` and Empty Files
 
 ```bash
-python git2text.py /path/to/codebase -gi -se -o output.md
+python git2text.py /path/to/codebase -igi -se -o output.md
 ```
 
-This command will respect the `.gitignore` rules defined in your repository, skip any empty files, and save the output to `output.md`.
+This command will ignore the `.gitignore` file, skip any empty files, and save the output to `output.md`.
 
 #### Ignore Specific Files and Directories
 

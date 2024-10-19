@@ -235,7 +235,7 @@ def main():
     parser.add_argument('-inc', '--include-files', nargs='*', help='List of files to include (supports glob patterns). If specified, only these files will be included.')
     parser.add_argument('-se', '--skip-empty-files', action='store_true', help='Skip empty files.')
     parser.add_argument('-cp', '--clipboard', action='store_true', help='Copy the output file content to clipboard.')
-    parser.add_argument('-gi', '--gitignore', action='store_true', help='Use .gitignore file to ignore files and directories.')
+    parser.add_argument('-igi', '--ignoregitignore', action='store_true', help='Ignore .gitignore file.')
     args = parser.parse_args()
 
     git_path = args.path
@@ -275,10 +275,10 @@ def main():
         skip_empty_files = args.skip_empty_files
 
         gitignore_spec = None
-        if args.gitignore:
+        if not args.ignoregitignore:
             if pathspec is None:
-                print("Error: 'pathspec' module is required to use the --gitignore option.")
-                print("Install it using 'pip install pathspec'")
+                print("Error: 'pathspec' module is required to parse the .gitignore file.")
+                print("Install it using 'pip install pathspec' or add the -igi flag to ignore .gitignore.")
                 sys.exit(1)
             gitignore_path = os.path.join(git_path, '.gitignore')
             if os.path.exists(gitignore_path):
@@ -287,6 +287,8 @@ def main():
                     gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
             else:
                 print(f'Warning: .gitignore file not found in {git_path}')
+        else:
+            print("Ignoring .gitignore file as per the --ignoregitignore flag.")
 
         # Determine the writing mode based on whether an output file is provided
         if output_file_path:
