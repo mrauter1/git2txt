@@ -1,9 +1,0 @@
-Objective: Generate a JSON list of relevant files from the provided codebase. This list must contain all the files necessary for a software engineer to use and modify the codebase. Criteria: 
-* Include core functionality, architecture and development files. 
-* Include the most relevant documentation explaining the above aspects. 
-* Include files with relevant examples.
-* EXCLUDE non-essential boiler plate code or config files. 
-* EXCLUDE non-essential files (e.g., git related files, docker related files, package config, well known standard or common libraries files, etc... ). 
-* Output Format: JSON list of filenames, example: ["file1", "file2", "file3"] 
-
-Codebase: 

@@ -1,3 +1,4 @@
 .env
 output/
 Rag prompt.txt
+/RAG prompt.txt
