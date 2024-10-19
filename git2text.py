@@ -4,6 +4,7 @@ import sys
 import argparse
 import glob
 import fnmatch
+import subprocess
 
 def get_language_from_extension(file_path: str) -> str:
     # Mapping of file extensions to Markdown code block language identifiers
@@ -155,6 +156,24 @@ def process_files(git_path: str, output_file_path: str, skip_empty_files: bool, 
         # Open the output file and append the content
         with open(output_file_path, 'a', encoding='utf-8') as output_file:
             append_to_file_markdown_style(relative_path, file_content, output_file)
+            
+def copy_to_clipboard(output_file_path: str) -> None:
+    """Copy the content of the output file to the clipboard."""
+    if sys.platform == "win32":
+        # On Windows, use the clip command with UTF-16LE encoding
+        with open(output_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+            # Encode the content to UTF-16LE as clip expects Unicode input
+            process = subprocess.Popen('clip', stdin=subprocess.PIPE, shell=True)
+            process.communicate(input=content.encode('utf-16le'))
+    elif sys.platform == "darwin":
+        # On macOS, use the pbcopy command with UTF-8 encoding
+        with open(output_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+            process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
+            process.communicate(input=content.encode('utf-8'))
+    else:
+        print(f"Clipboard functionality is not supported on {sys.platform}.")
 
 def main():
     # Parse command-line arguments
@@ -164,7 +183,8 @@ def main():
     parser.add_argument('-if', '--ignore-files', nargs='*', help='List of files to ignore (supports glob patterns).')
     parser.add_argument('-id', '--ignore-dirs', nargs='*', help='List of directories to ignore (supports glob patterns).')
     parser.add_argument('-inc', '--include-files', nargs='*', help='List of files to include (supports glob patterns). If specified, only these files will be included.')
-    parser.add_argument('--skip-empty-files', action='store_true', help='Skip empty files.')
+    parser.add_argument('-se', '--skip-empty-files', action='store_true', help='Skip empty files.')
+    parser.add_argument('-cp', '--clipboard', action='store_true', help='Copy the output file content to clipboard.')
     args = parser.parse_args()
 
     git_path = args.path
@@ -206,6 +226,11 @@ def main():
         # Use ignore patterns
         write_tree_to_file(git_path, output_file_path, ignore_dirs)
         process_path(git_path, ignore_files, ignore_dirs, output_file_path, skip_empty_files)
+        
+    # If the flag --clipboard is set, copy the output to the clipboard
+    if args.clipboard:
+        copy_to_clipboard(output_file_path)
+        print(f"The content of {output_file_path} has been copied to the clipboard.")        
 
     print(f"All contents have been written to: {output_file_path}")
 
