@@ -123,26 +123,23 @@ This command will include only Python files within the `src` directory (includin
 ## Example Output
 
 The output of **Git2Text** follows a Markdown structure for easy readability. Here's a sample of how it formats the files:
-```
+````
 ├── main.py
 ├── folder/
 │   ├── file.json
-```
-```
+
 # File: main.py
 ```python
-# Sample Python Code
 print("Hello, World!")
 ```
 # End of file: main.py
 ```
 # File: folder/file.json
 ```json
-{
-    "name": "example"
-}  
+{"name": "example"}  
 ```
 # End of file: folder/file.json
+````
 
 This format helps provide syntax-highlighted code blocks, making it much easier for LLMs to understand your code.
 
