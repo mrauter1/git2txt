@@ -11,27 +11,7 @@ The tool provides a structured output of your repository's files along with thei
 - **Code Block Formatting**: Files are formatted with appropriate syntax highlighting for better readability.
 - **Easy Copy to Clipboard**: Quickly copy the output for pasting into LLMs like ChatGPT.
 - **Customizable Filtering**: Control which files or directories to include or ignore using `.gitignore` rules or command-line flags.
-
-## File Overview
-
-The repository contains the following files:
-
-```
-├── .gitignore
-├── RAG prompt example.txt
-├── README.md
-├── git2text.bat
-└── git2text.py
-```
-
-### File Descriptions
-
-- **`.gitignore`**: Specifies which files and folders to exclude during extraction (useful for Git projects).
-- **`RAG prompt example.txt`**: A sample prompt for using the output with LLMs.
-- **`README.md`**: This file, containing the documentation for the project.
-- **`git2text.bat`**: Windows batch script for running `git2text.py` with ease.
-- **`git2text.py`**: The main Python script that processes the codebase and generates the Markdown output.
-
+  
 ## Prerequisites
 
 - **Python 3.6+**
