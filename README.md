@@ -17,6 +17,7 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
 
 - **Python 3.6+**
 - **Pathspec** library for `.gitignore` parsing (Install via `pip install pathspec`)
+- **Git** (for cloning remote repositories)
 
 ## Installation
 
