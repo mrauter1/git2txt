@@ -1,8 +1,6 @@
 # Git2Text - Codebase Extraction Utility
 
-Git2Text is an utility that simplifies the process of extracting and formatting the entire structure of a codebase into a single text file. Whether you're working with a local Git project, a remote Git repository, or any other codebase, Git2Text is perfect for copying and pasting your code into ChatGPT or other large language models (LLMs), making your conversations more informative and streamlined.
-
-The tool provides a structured output of your repository's files along with their content, all in Markdown format, which makes it readable and organized for LLMs. With Git2Text, you can avoid the hassle of manually copying and pasting the source for LLM consumption.
+Git2Text is an utility that simplifies the process of extracting and formatting the entire structure of a codebase into a single text file. Whether you're working with a local Git project, a remote Git repository, or any other codebase, Git2Text is perfect for copying and pasting your code into ChatGPT or other large language models (LLMs). With Git2Text, you can avoid the hassle of manually copying and pasting the source for LLM consumption.
 
 ## Features
 
