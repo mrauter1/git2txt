@@ -7,10 +7,13 @@ The tool provides a structured output of your repository's files along with thei
 ## Features
 
 - **Extract Complete Codebase**: Convert your entire codebase into a Markdown-formatted text.
+- **Support for Local and Remote Repositories**: Work with local directories or clone remote Git repositories on-the-fly.
 - **Tree View Representation**: Automatically generate a directory structure to provide context.
 - **Code Block Formatting**: Files are formatted with appropriate syntax highlighting for better readability.
 - **Easy Copy to Clipboard**: Quickly copy the output for pasting into LLMs like ChatGPT.
-- **Customizable Filtering**: Control which files or directories to include or ignore using `.gitignore` rules or command-line flags.
+- **GLOB Pattern Support**: Use powerful GLOB patterns for fine-grained control over file inclusion and exclusion.
+- **.gitignore Integration**: Respect .gitignore rules by default, with option to override.
+- **Cross-Platform Compatibility**: Works on Windows, macOS, and Linux.
   
 ## Prerequisites
 
@@ -127,13 +130,6 @@ print("Hello, World!")
 # End of file: folder/file.json
 ````
 
-This format helps provide syntax-highlighted code blocks, making it much easier for LLMs to understand your code.
-
-## Tips for Using with LLMs
-
-- **Tree Representation**: The directory tree provides context to the LLM on the project structure, making it easier to understand relationships between files.
-- **RAG Prompting**: Use the `RAG prompt example.txt` file to guide LLMs on how to interpret and work with your extracted code.
-
 ## Contributing
 
 Feel free to contribute to the project by opening an issue or submitting a pull request. We welcome feedback and suggestions to improve **Git2Text**!
@@ -148,5 +144,4 @@ For any questions or support, please open an issue on the GitHub repository.
 
 ---
 
-Happy coding, and enjoy seamless interaction with your favorite LLMs using **Git2Text**! 🚀
 
