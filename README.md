@@ -12,14 +12,13 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
 - **GLOB Pattern Support**: Use powerful GLOB patterns for fine-grained control over file inclusion and exclusion.
 - **.gitignore Integration**: Respect .gitignore rules by default, with option to override.
 - **Cross-Platform Compatibility**: Works on Windows, macOS, and Linux.
-  
+
 ## Prerequisites
 
 - **Python 3.6+**
 - **Pathspec** library for `.gitignore` parsing (Install via `pip install pathspec`)
 - **Git** (for cloning remote repositories)
 - **`xclip` or `xsel` for Clipboard Support on Linux**: If you are using Linux and want clipboard functionality, you need to have either `xclip` or `xsel` installed.
-
 
 ## Installation
 
@@ -28,25 +27,49 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
    git clone https://github.com/yourusername/git2text.git
    cd git2text
    ```
-2. Install dependencies:
+   
+### Option 1: Manual Installation
+
+2. Install the package and dependencies:
    ```bash
-   pip install pathspec
+   python install.py
    ```
+
+   This will install the package and attempt to automatically add the `git2text` executable to your system's PATH.
+
+   If the script cannot automatically modify your PATH, it will prompt you to add it manually or provide instructions for Unix-based systems to create a symlink to `/usr/local/bin`.   
+
+### Option 2: Installation Script
+
+Use the provided installation scripts to install the package and ensure `git2text` is added to your system's PATH automatically.
+
+#### Windows
+Run the following command in Command Prompt:
+
+```bash
+install.bat
+```
+
+#### macOS/Linux
+Run the following command in your terminal:
+
+```bash
+./install.sh
+```
 
 ## Usage
 
+Once installed, you can run `git2text` from any terminal or command prompt.
+
 ### Running the Script
 
-Run the script directly from your terminal or command prompt:
-
 ```bash
-python git2text.py <path-or-url> [options]
+git2text <path-or-url> [options]
 ```
 
-The <path-or-url> can be:
-
-A path to a local directory containing your codebase
-A Git repository URL (e.g., https://github.com/username/repo.git)
+The `<path-or-url>` can be:
+- A path to a local directory containing your codebase
+- A Git repository URL (e.g., https://github.com/username/repo.git)
 
 ### Options
 
@@ -62,45 +85,40 @@ A Git repository URL (e.g., https://github.com/username/repo.git)
 #### Extract Entire Codebase from a Local Directory to a Markdown File
 
 ```bash
-python git2text.py /path/to/local/codebase -o output.md
+git2text /path/to/local/codebase -o output.md
 ```
 
 #### Clone and Extract a Remote Git Repository
 
 ```bash
-python git2text.py https://github.com/username/repo.git -o output.md
+git2text https://github.com/username/repo.git -o output.md
 ```
 
 This command will clone the specified repository to a temporary directory, extract its contents, and save the output to `output.md`.
 
-#### Extract Only Specific Files and Copy to Clipboard
-
-```bash
-python git2text.py /path/to/codebase -inc "*.py"
-```
-
 #### Skip `.gitignore` and Empty Files
 
 ```bash
-python git2text.py https://github.com/username/repo.git -igi -se -o output.md
+git2text https://github.com/username/repo.git -igi -se -o output.md
+```
+
+#### Include Only Specific Files and Copy to Clipboard
+
+```bash
+git2text /path/to/codebase -inc "*.py" -cp
 ```
 
 #### Ignore Specific Files and Directories
 
 ```bash
-python git2text.py /path/to/codebase -ig "*.log" "__pycache__" -o output.md
-```
-
-#### Include Only Specific Files and Directories
-
-```bash
-python git2text.py /path/to/codebase -inc "src/**/*.py" -o output.md
+git2text /path/to/codebase -ig "*.log" "__pycache__" -o output.md
 ```
 
 ## Example Output
 
 The output of **Git2Text** follows a Markdown structure for easy readability. Here's a sample of how it formats the files:
-````
+
+````markdown
 ├── main.py
 ├── folder/
 │   ├── file.json
@@ -113,7 +131,7 @@ print("Hello, World!")
 ```
 # File: folder/file.json
 ```json
-{"name": "example"}  
+{"name": "example"}
 ```
 # End of file: folder/file.json
 ````
@@ -129,7 +147,4 @@ This project is licensed under the MIT License.
 ## Contact
 
 For any questions or support, please open an issue on the GitHub repository.
-
----
-
 
