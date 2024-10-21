@@ -242,7 +242,7 @@ def main():
     parser.add_argument('-inc', '--include', nargs='*', help='List of files or directories to include (supports glob patterns). If specified, only these paths will be included.')
     parser.add_argument('-se', '--skip-empty-files', action='store_true', help='Skip empty files.')
     parser.add_argument('-cp', '--clipboard', action='store_true', help='Copy the output file content to clipboard.')
-    parser.add_argument('-igi', '--ignoregitignore', action='store_true', help='Ignore .gitignore file.')
+    parser.add_argument('-igi', '--ignoregitignore', action='store_true', help='Ignore .gitignore and .globalignore files.')
     args = parser.parse_args()
 
     git_path = args.path
@@ -283,18 +283,32 @@ def main():
         gitignore_spec = None
         if not args.ignoregitignore:
             if pathspec is None:
-                print("Error: 'pathspec' module is required to parse the .gitignore file.")
-                print("Install it using 'pip install pathspec' or add the -igi flag to ignore .gitignore.")
+                print("Error: 'pathspec' module is required to parse the .gitignore and .globalignore files.")
+                print("Install it using 'pip install pathspec' or add the -igi flag to ignore .gitignore and .globalignore.")
                 sys.exit(1)
+            gitignore_patterns = []
+
+            # Read .gitignore file in git_path
             gitignore_path = os.path.join(git_path, '.gitignore')
             if os.path.exists(gitignore_path):
                 with open(gitignore_path, 'r') as f:
-                    gitignore_patterns = f.read().splitlines()
-                    gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
+                    gitignore_patterns.extend(f.read().splitlines())
+            # else:
+            #    print(f'Warning: .gitignore file not found in {git_path}')
+
+            # Read .globalignore file in script directory
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            globalignore_path = os.path.join(script_dir, '.globalignore')
+            if os.path.exists(globalignore_path):
+                with open(globalignore_path, 'r') as f:
+                    gitignore_patterns.extend(f.read().splitlines())
             else:
-                print(f'Warning: .gitignore file not found in {git_path}')
+                print(f'Warning: .globalignore file not found in {script_dir}')
+
+            if gitignore_patterns:
+                gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
         else:
-            print("Ignoring .gitignore file as per the --ignoregitignore flag.")
+            print("Ignoring .gitignore and .globalignore files as per the --ignoregitignore flag.")
 
         # Determine the writing mode based on whether an output file is provided
         if output_file_path:

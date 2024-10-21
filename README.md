@@ -1,6 +1,6 @@
 # Git2Text - Codebase Extraction Utility
 
-Git2Text is an utility that simplifies the process of extracting and formatting the entire structure of a codebase into a single text file. Whether you're working with a local Git project, a remote Git repository, or any other codebase, Git2Text is perfect for copying and pasting your code into ChatGPT or other large language models (LLMs). With Git2Text, you can avoid the hassle of manually copying and pasting the source for LLM consumption.
+Git2Text is a utility that simplifies the process of extracting and formatting the entire structure of a codebase into a single text file. Whether you're working with a local Git project, a remote Git repository, or any other codebase, Git2Text is perfect for copying and pasting your code into ChatGPT or other large language models (LLMs). With Git2Text, you can avoid the hassle of manually copying and pasting the source for LLM consumption.
 
 ## Features
 
@@ -10,7 +10,7 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
 - **Code Block Formatting**: Files are formatted with appropriate syntax highlighting for better readability.
 - **Easy Copy to Clipboard**: Quickly copy the output for pasting into LLMs like ChatGPT.
 - **GLOB Pattern Support**: Use powerful GLOB patterns for fine-grained control over file inclusion and exclusion.
-- **.gitignore Integration**: Respect .gitignore rules by default, with option to override.
+- **.gitignore Integration**: Respect `.gitignore` rules by default, with option to override.
 - **Cross-Platform Compatibility**: Works on Windows, macOS, and Linux.
 
 ## Prerequisites
@@ -27,7 +27,7 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
    git clone https://github.com/yourusername/git2text.git
    cd git2text
    ```
-   
+
 ### Option 1: Manual Installation
 
 2. Install the package and dependencies:
@@ -37,7 +37,7 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
 
    This will install the package and attempt to automatically add the `git2text` executable to your system's PATH.
 
-   If the script cannot automatically modify your PATH, it will prompt you to add it manually or provide instructions for Unix-based systems to create a symlink to `/usr/local/bin`.   
+   If the script cannot automatically modify your PATH, it will prompt you to add it manually or provide instructions for Unix-based systems to create a symlink to `/usr/local/bin`.
 
 ### Option 2: Installation Script
 
@@ -112,6 +112,29 @@ git2text /path/to/codebase -inc "*.py" -cp
 
 ```bash
 git2text /path/to/codebase -ig "*.log" "__pycache__" -o output.md
+```
+
+### .globalignore Support
+
+Git2Text also supports a `.globalignore` file located in the same directory as the `git2text.py` script. This file works similarly to a `.gitignore` file but applies globally across any codebase you process.
+
+If a `.globalignore` file is present, it will be used to exclude files or directories specified in it, in addition to `.gitignore`.
+
+To ignore the `.globalignore` file, use the `-igi` flag:
+```bash
+git2text /path/to/codebase -igi
+```
+
+#### Modifying `.globalignore`
+To modify or change the global ignore rules, simply edit the `.globalignore` file located alongside the script. Common entries include ignoring directories like `node_modules/`, `dist/`, and files like `*.log`.
+
+Example `.globalignore`:
+
+```
+node_modules/
+dist/
+*.log
+*.tmp
 ```
 
 ## Example Output

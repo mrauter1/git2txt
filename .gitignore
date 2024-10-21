@@ -4,3 +4,4 @@ output/
 *.egg-info/
 *.eggs/
 /src/__pycache__
+/src/*.tmp

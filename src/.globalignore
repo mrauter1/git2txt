@@ -1,0 +1,98 @@
+# Directories
+node_modules/
+dist/
+build/
+out/
+coverage/
+.idea/
+.vscode/
+.DS_Store
+__pycache__/
+*.egg-info/
+*.eggs/
+.env/
+.venv/
+logs/
+tmp/
+.cache/
+target/
+bin/
+obj/
+
+# Operating System files
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+*.swn
+
+# Dependency directories (language-specific)
+vendor/
+bower_components/
+pip-wheel-metadata/
+jspm_packages/
+
+# Compiled binary files
+*.class
+*.o
+*.so
+*.dll
+*.exe
+*.out
+*.a
+*.dylib
+
+# Compiled source
+*.pyc
+*.pyo
+*.pyd
+*.exe
+*.app
+*.o
+*.obj
+*.class
+*.jar
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+
+# Package files
+*.gem
+*.jar
+*.war
+*.ear
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Archives
+*.tar
+*.zip
+*.gz
+*.bz2
+*.xz
+
+# IDE-specific files
+*.iml
+*.ipr
+*.iws
+*.sublime-workspace
+*.sublime-project
+
+# Lock files
+package-lock.json
+yarn.lock
+pipfile.lock
+pnpm-lock.yaml
+
+# Others
+*.bak
+*.tmp
+*.temp
+*.~*
