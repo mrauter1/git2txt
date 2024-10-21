@@ -18,6 +18,8 @@ Git2Text is an utility that simplifies the process of extracting and formatting 
 - **Python 3.6+**
 - **Pathspec** library for `.gitignore` parsing (Install via `pip install pathspec`)
 - **Git** (for cloning remote repositories)
+- **`xclip` or `xsel` for Clipboard Support on Linux**: If you are using Linux and want clipboard functionality, you need to have either `xclip` or `xsel` installed.
+
 
 ## Installation
 
@@ -49,24 +51,11 @@ A Git repository URL (e.g., https://github.com/username/repo.git)
 ### Options
 
 - **`-o, --output`**: Specify the output file path.
-- **`-if, --ignore-files`**: List of files to ignore (supports glob patterns).
-- **`-id, --ignore-dirs`**: List of directories to ignore (supports glob patterns).
-- **`-inc, --include-files`**: List of files to include. If specified, only these files will be processed.
+- **`-ig, --ignore`**: List of files or directories to ignore (supports GLOB patterns).
+- **`-inc, --include`**: List of files or directories to include (supports GLOB patterns). If specified, only these paths will be processed.
 - **`-se, --skip-empty-files`**: Skip empty files during extraction.
 - **`-cp, --clipboard`**: Copy the generated content to the clipboard.
 - **`-igi, --ignoregitignore`**: Ignore the `.gitignore` file when specified.
-
-### Example Usage
-
-### Options
-
-- **-o, --output**: Specify the output file path.
-- **-if, --ignore-files**: List of files to ignore (supports glob patterns).
-- **-id, --ignore-dirs**: List of directories to ignore (supports glob patterns).
-- **-inc, --include-files**: List of files to include. If specified, only these files will be processed.
-- **-se, --skip-empty-files**: Skip empty files during extraction.
-- **-cp, --clipboard**: Copy the generated content to the clipboard.
-- **-igi, --ignoregitignore**: Ignore the .gitignore file when specified.
 
 ### Example Usage
 
@@ -90,7 +79,7 @@ This command will clone the specified repository to a temporary directory, extra
 python git2text.py /path/to/codebase -inc "*.py"
 ```
 
-#### Skip .gitignore and Empty Files
+#### Skip `.gitignore` and Empty Files
 
 ```bash
 python git2text.py https://github.com/username/repo.git -igi -se -o output.md
@@ -99,13 +88,13 @@ python git2text.py https://github.com/username/repo.git -igi -se -o output.md
 #### Ignore Specific Files and Directories
 
 ```bash
-python git2text.py /path/to/codebase -if "*.log" -id "__pycache__" -o output.md
+python git2text.py /path/to/codebase -ig "*.log" "__pycache__" -o output.md
 ```
 
-#### Include Only Specific Files
+#### Include Only Specific Files and Directories
 
 ```bash
-python git2text.py https://github.com/username/repo.git -inc "src/**/*.py" -o output.md
+python git2text.py /path/to/codebase -inc "src/**/*.py" -o output.md
 ```
 
 ## Example Output
