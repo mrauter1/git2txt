@@ -66,14 +66,24 @@ def write_tree_to_file_with_included_paths(git_path: str, output_handle, include
     output_handle.write(tree_str.rstrip('\r\n') + '\n\n')
 
 def build_tree(directory, tree_dict, ignore_list, git_path, gitignore_spec=None):
-    items = os.listdir(directory)
+    try:
+        items = os.listdir(directory)
+    except PermissionError:
+        print(f"Warning: Permission denied: {directory}. Skipping directory.")
+        return
     items.sort()  # Sort the items to have a consistent order
     for item in items:
         path = os.path.join(directory, item)
-        if os.path.isdir(path) and not should_ignore(path, ignore_list, git_path, gitignore_spec):
+        try:
+            is_dir = os.path.isdir(path)
+            is_file = os.path.isfile(path)
+        except PermissionError:
+            print(f"Warning: Permission denied: {path}. Skipping.")
+            continue
+        if is_dir and not should_ignore(path, ignore_list, git_path, gitignore_spec):
             tree_dict[item] = {'path': path, 'is_dir': True, 'children': {}}
             build_tree(path, tree_dict[item]['children'], ignore_list, git_path, gitignore_spec)
-        elif os.path.isfile(path):
+        elif is_file:
             if not should_ignore(path, ignore_list, git_path, gitignore_spec):
                 tree_dict[item] = {'path': path, 'is_dir': False}
 
@@ -134,12 +144,15 @@ def append_to_single_file(file_path: str, git_path: str, output_handle, skip_emp
     except UnicodeDecodeError:
         print(f'Warning: Could not decode {file_path}. Skipping file.')
         return
+    except PermissionError:
+        print(f'Warning: Permission denied: {file_path}. Skipping file.')
+        return
 
     # Append the content in Markdown style
     append_to_file_markdown_style(relative_path, file_content, output_handle)
 
 def process_path(git_path: str, ignore_list: list, output_handle, skip_empty_files: bool, gitignore_spec=None) -> None:
-    for root, dirs, files in os.walk(git_path, topdown=True):
+    for root, dirs, files in os.walk(git_path, topdown=True, onerror=lambda e: print(f"Warning: {e.strerror}: {e.filename}. Skipping.")):
         # Apply filtering on the directories
         dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), ignore_list, git_path, gitignore_spec)]
 
@@ -162,7 +175,7 @@ def process_include_list(git_path: str, output_handle, skip_empty_files: bool, i
             append_to_single_file(full_path, git_path, output_handle, skip_empty_files)
         elif os.path.isdir(full_path):
             # Recursively process directory
-            for root, dirs, files in os.walk(full_path):
+            for root, dirs, files in os.walk(full_path, onerror=lambda e: print(f"Warning: {e.strerror}: {e.filename}. Skipping.")):
                 for file in files:
                     file_full_path = os.path.join(root, file)
                     append_to_single_file(file_full_path, git_path, output_handle, skip_empty_files)

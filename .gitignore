@@ -1,2 +1,6 @@
 .env
 output/
+*.egg
+*.egg-info/
+*.eggs/
+/src/__pycache__
