@@ -1,1 +1,1 @@
-python install.py
+python "%~dp0install.py"
