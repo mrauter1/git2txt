@@ -54,6 +54,7 @@ install.bat
 Run the following command in your terminal:
 
 ```bash
+chmod +x install.sh
 ./install.sh
 ```
 
