@@ -24,7 +24,7 @@ Git2Text is a utility that simplifies the process of extracting and formatting t
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/git2text.git
+   git clone https://github.com/mrauter1/git2text.git
    cd git2text
    ```
 
