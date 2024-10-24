@@ -6,3 +6,4 @@ output/
 /src/__pycache__
 /src/*.tmp
 /dist/
+/build/
