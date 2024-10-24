@@ -1,8 +1,10 @@
+# File: install.py
 import os
 import sys
 import subprocess
 import ctypes
 import platform
+import sysconfig
 
 def is_admin():
     """Check if the script is running with administrative privileges."""
@@ -18,33 +20,61 @@ def install_package():
     """Install the package and determine the scripts path."""
     print("Installing the package...")
     try:
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-e', '.'], check=True)
+        # Determine the directory where install.py is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Absolute path to the package directory
+        package_dir = script_dir
+
+        # Ensure pip is available in the current Python interpreter
+        try:
+            subprocess.run([sys.executable, '-m', 'pip', '--version'], check=True, stdout=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            print("pip is not available in the current Python environment.")
+            print("Please install pip or use a Python interpreter that has pip installed.")
+            sys.exit(1)
+
+        # Install the package in editable mode
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-e', package_dir], check=True)
         print("Package installed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while installing the package: {e}")
         sys.exit(1)
-
-    # Retrieve the package installation location
-    try:
-        result = subprocess.run([sys.executable, '-m', 'pip', 'show', 'git2text'], capture_output=True, text=True, check=True)
-        output = result.stdout
-        location = None
-        for line in output.splitlines():
-            if line.startswith('Location:'):
-                location = line.split(':', 1)[1].strip()
-                break
-        if not location:
-            print("Could not determine the package installation location.")
-            sys.exit(1)
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred while retrieving package information: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
         sys.exit(1)
 
-    # Determine the scripts path from the location
-    scripts_path = os.path.join(location, '..', 'Scripts')
-    if not os.path.exists(scripts_path):
-        # On Unix-based systems or if Scripts does not exist, try 'bin'
-        scripts_path = os.path.join(location, '..', 'bin')
+    # Determine the possible schemes
+    schemes = []
+
+    # Try to find the scripts path where the binary is installed
+    binary_name = 'git2text.exe' if platform.system() == 'Windows' else 'git2text'
+    scripts_path = None
+
+    # Check standard schemes
+    if platform.system() == 'Windows':
+        schemes.extend(['nt', 'nt_user', 'nt_venv'])
+    else:
+        schemes.extend(['posix_prefix', 'posix_user', 'posix_home', 'posix_venv'])
+
+    for scheme in schemes:
+        try:
+            paths = sysconfig.get_paths(scheme=scheme)
+        except KeyError:
+            # Scheme not found, skip
+            continue
+        possible_scripts_path = paths.get('scripts')
+        if possible_scripts_path:
+            binary_path = os.path.join(possible_scripts_path, binary_name)
+            if os.path.exists(binary_path):
+                scripts_path = possible_scripts_path
+                break
+
+    if not scripts_path:
+        print("Warning: Could not find the binary in any standard scripts directories.")
+        print(f"Tried schemes: {schemes}")
+        return None
+
     scripts_path = os.path.abspath(scripts_path)
     return scripts_path
 
@@ -80,7 +110,7 @@ def set_environment_variable(variable, value, scope='user'):
             return False
         try:
             subprocess.run(command, shell=True, check=True)
-            print(f"Successfully updated {variable} in {scope} environment variables.")
+            print(f"Successfully updated {variable} in the {scope} environment variables.")
             print("You may need to restart your command prompt or computer for changes to take effect.")
             return True
         except subprocess.CalledProcessError as e:
@@ -162,8 +192,8 @@ def check_and_add_scripts_path_windows(scripts_path):
     elif try_add_path_to_environment_variable(scripts_path, 'PATH', scope='system'):
         print("Scripts path successfully added to the system PATH.")
     else:
-        print("Failed to add scripts path to PATH variable.")
-        print("Please consider cleaning up your PATH variable or use the script from its full path.")
+        print("The script path was not added to PATH variable. Please consider adding the script path to PATH manually.")
+        print(f"Script path: {scripts_path}")
 
 def check_and_create_symlink_unix(scripts_path):
     """Check and create a symlink to git2text in /usr/local/bin on Unix-based systems."""
@@ -199,8 +229,23 @@ def check_and_create_symlink_unix(scripts_path):
         print(f"An error occurred while creating symlink: {e}")
 
 def main():
-    install_package()
+    # Detect if running in a virtual environment
+    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        in_virtual_env = True
+    else:
+        in_virtual_env = False
+
+    if in_virtual_env:
+        print("\nWarning: You are about to install git2text inside a virtual environment.")
+        print("The git2text CLI tool will not be available globally once the virtual environment is deactivated.")
+        choice = input("Do you want to continue with the installation? [y/N]: ").strip().lower()
+        if choice != 'y':
+            print("Installation aborted by user.")
+            sys.exit(0)
+
     scripts_path = install_package()
+    if scripts_path is None:
+        sys.exit(1)
     print(f"Python Scripts path: {scripts_path}")
 
     if platform.system() == 'Windows':

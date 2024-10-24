@@ -5,3 +5,4 @@ output/
 *.eggs/
 /src/__pycache__
 /src/*.tmp
+/dist/

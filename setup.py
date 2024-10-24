@@ -8,7 +8,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Marcelo Rauter",
     author_email="marcelorauter2@gmail.com",
-    url="https://github.com/yourusername/git2text",
+    url="https://github.com/mrauter1/git2text",
     packages=find_packages(where="src"),  # Looks for Python packages in the 'src' directory
     package_dir={"": "src"},  # Specifies that the root package is located in 'src'
     py_modules=['git2text'],  # Since git2text.py is directly under src, we treat it as a module
