@@ -1,4 +1,3 @@
-# main.py
 import os
 import sys
 import argparse
@@ -16,7 +15,15 @@ except ImportError:
     pathspec = None  # Will check if pathspec is available
 
 def get_language_from_extension(file_path: str) -> str:
-    # Mapping of file extensions to Markdown code block language identifiers
+    """
+    Determine the language for syntax highlighting based on the file extension.
+
+    Args:
+        file_path (str): The path to the file.
+
+    Returns:
+        str: The language identifier for Markdown code blocks.
+    """
     extension_to_language = {
         '.abap': 'abap',
         '.ads': 'ada',
@@ -108,6 +115,16 @@ def get_language_from_extension(file_path: str) -> str:
     return extension_to_language.get(extension, 'text')
 
 def build_tree_from_included_paths(include_list: list, git_path: str) -> dict:
+    """
+    Build a tree structure from the included paths.
+
+    Args:
+        include_list (list): List of paths to include.
+        git_path (str): The base path of the git repository.
+
+    Returns:
+        dict: A dictionary representing the tree structure.
+    """
     tree_dict = {}
     for path in include_list:
         path = path.replace('\\', '/')
@@ -131,11 +148,29 @@ def build_tree_from_included_paths(include_list: list, git_path: str) -> dict:
     return tree_dict
 
 def write_tree_to_file_with_included_paths(git_path: str, output_handle, include_list: list):
+    """
+    Write the tree structure to the output file based on included paths.
+
+    Args:
+        git_path (str): The base path of the git repository.
+        output_handle: The file handle to write the output.
+        include_list (list): List of paths to include.
+    """
     tree_dict = build_tree_from_included_paths(include_list, git_path)
     tree_str = format_tree(tree_dict)
     output_handle.write(tree_str.rstrip('\r\n') + '\n\n')
 
 def build_tree(directory, tree_dict, ignore_list, git_path, gitignore_spec=None):
+    """
+    Recursively build a tree structure of the directory.
+
+    Args:
+        directory: The directory to build the tree from.
+        tree_dict: The dictionary to store the tree structure.
+        ignore_list: List of paths to ignore.
+        git_path: The base path of the git repository.
+        gitignore_spec: The gitignore specification.
+    """
     try:
         items = os.listdir(directory)
     except PermissionError:
@@ -158,6 +193,16 @@ def build_tree(directory, tree_dict, ignore_list, git_path, gitignore_spec=None)
                 tree_dict[item] = {'path': path, 'is_dir': False}
 
 def format_tree(tree_dict, padding=''):
+    """
+    Format the tree structure into a string.
+
+    Args:
+        tree_dict: The dictionary representing the tree structure.
+        padding: The padding for the tree structure.
+
+    Returns:
+        str: The formatted tree structure.
+    """
     lines = ''
     if not tree_dict:
         return lines
@@ -173,17 +218,46 @@ def format_tree(tree_dict, padding=''):
     return lines
 
 def write_tree_to_file(directory, output_handle, ignore_list, gitignore_spec=None):
+    """
+    Write the tree structure to the output file.
+
+    Args:
+        directory: The directory to build the tree from.
+        output_handle: The file handle to write the output.
+        ignore_list: List of paths to ignore.
+        gitignore_spec: The gitignore specification.
+    """
     tree_dict = {}
     build_tree(directory, tree_dict, ignore_list, directory, gitignore_spec)
     tree_str = format_tree(tree_dict)
     output_handle.write(tree_str.rstrip('\r\n') + '\n\n')  # write the tree followed by two newlines
 
 def append_to_file_markdown_style(relative_path: str, file_content: str, output_handle) -> None:
+    """
+    Append the file content to the output file in Markdown style.
+
+    Args:
+        relative_path (str): The relative path of the file.
+        file_content (str): The content of the file.
+        output_handle: The file handle to write the output.
+    """
     language = get_language_from_extension(relative_path)
     # Write the header with the relative path and the file content wrapped in a code block
     output_handle.write(f"# File: {relative_path}\n```{language}\n{file_content}\n```\n# End of file: {relative_path}\n\n")
 
 def should_ignore(path: str, ignore_list: list, git_path: str, gitignore_spec=None) -> bool:
+    """
+    Check if the path should be ignored based on the ignore list and gitignore specification.
+
+    Args:
+        path (str): The path to check.
+        ignore_list (list): List of paths to ignore.
+        git_path (str): The base path of the git repository.
+        gitignore_spec: The gitignore specification.
+
+    Returns:
+        bool: True if the path should be ignored, False otherwise.
+    """
     relative_path = os.path.relpath(path, git_path)
     # Always ignore the .git folder
     if relative_path == '.git' or relative_path.startswith('.git' + os.sep):
@@ -199,6 +273,15 @@ def should_ignore(path: str, ignore_list: list, git_path: str, gitignore_spec=No
     return False
 
 def append_to_single_file(file_path: str, git_path: str, output_handle, skip_empty_files: bool) -> None:
+    """
+    Append the content of a single file to the output file.
+
+    Args:
+        file_path (str): The path to the file.
+        git_path (str): The base path of the git repository.
+        output_handle: The file handle to write the output.
+        skip_empty_files (bool): Whether to skip empty files.
+    """
     # Check if the file is empty and should be skipped
     if skip_empty_files and os.path.getsize(file_path) == 0:
         print(f'Skipping empty file: {file_path}')
@@ -222,6 +305,16 @@ def append_to_single_file(file_path: str, git_path: str, output_handle, skip_emp
     append_to_file_markdown_style(relative_path, file_content, output_handle)
 
 def process_path(git_path: str, ignore_list: list, output_handle, skip_empty_files: bool, gitignore_spec=None) -> None:
+    """
+    Process all files and directories in the given path.
+
+    Args:
+        git_path (str): The base path of the git repository.
+        ignore_list (list): List of paths to ignore.
+        output_handle: The file handle to write the output.
+        skip_empty_files (bool): Whether to skip empty files.
+        gitignore_spec: The gitignore specification.
+    """
     for root, dirs, files in os.walk(git_path, topdown=True, onerror=lambda e: print(f"Warning: {e.strerror}: {e.filename}. Skipping.")):
         # Apply filtering on the directories
         dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), ignore_list, git_path, gitignore_spec)]
@@ -234,6 +327,15 @@ def process_path(git_path: str, ignore_list: list, output_handle, skip_empty_fil
             append_to_single_file(full_path, git_path, output_handle, skip_empty_files)
 
 def process_include_list(git_path: str, output_handle, skip_empty_files: bool, include_list: list) -> None:
+    """
+    Process files and directories from the include list.
+
+    Args:
+        git_path (str): The base path of the git repository.
+        output_handle: The file handle to write the output.
+        skip_empty_files (bool): Whether to skip empty files.
+        include_list (list): List of paths to include.
+    """
     for relative_path in include_list:
         full_path = os.path.join(git_path, relative_path.replace('/', os.sep))  # Ensure platform compatibility
 
@@ -253,7 +355,12 @@ def process_include_list(git_path: str, output_handle, skip_empty_files: bool, i
             print(f'Warning: Path is neither a file nor a directory: {relative_path}')
 
 def copy_to_clipboard_content(content: str) -> None:
-    """Copy the given content to the clipboard."""
+    """
+    Copy the given content to the clipboard.
+
+    Args:
+        content (str): The content to copy to the clipboard.
+    """
     if sys.platform == "win32":
         # On Windows, use the clip command with UTF-16LE encoding
         process = subprocess.Popen('clip', stdin=subprocess.PIPE, shell=True)
@@ -277,13 +384,26 @@ def copy_to_clipboard_content(content: str) -> None:
         print(f"Clipboard functionality is not supported on {sys.platform}.")
 
 def copy_to_clipboard_file(output_file_path: str) -> None:
-    """Copy the content of the output file to the clipboard."""
+    """
+    Copy the content of the output file to the clipboard.
+
+    Args:
+        output_file_path (str): The path to the output file.
+    """
     with open(output_file_path, 'r', encoding='utf-8') as file:
         content = file.read()
     copy_to_clipboard_content(content)
 
 def is_git_url(path: str) -> bool:
-    """Check if the given path is a git URL."""
+    """
+    Check if the given path is a git URL.
+
+    Args:
+        path (str): The path to check.
+
+    Returns:
+        bool: True if the path is a git URL, False otherwise.
+    """
     git_url_prefixes = ['http://', 'https://', 'git@', 'ssh://', 'git://']
     return any(path.startswith(prefix) for prefix in git_url_prefixes)
 
@@ -295,6 +415,11 @@ def on_rm_error(func, path, exc_info):
     it attempts to add write permission and then retries.
 
     If the error is for another reason, it re-raises the error.
+
+    Args:
+        func: The function that raised the error.
+        path: The path that caused the error.
+        exc_info: The exception information.
     """
     if not os.access(path, os.W_OK):
         # Attempt to add write permission and retry
@@ -409,7 +534,7 @@ def main():
                 if args.clipboard:
                     copy_to_clipboard_file(output_file_path)
                     print(f"The content of {output_file_path} has been copied to the clipboard.")
-                
+
                 print(f"All contents have been written to: {output_file_path}")
         else:
             # No output file provided; collect content in-memory and copy to clipboard by default
