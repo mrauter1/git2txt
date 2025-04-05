@@ -2,8 +2,6 @@
 import os
 import sys
 import argparse
-import glob
-import fnmatch
 import subprocess
 import io  # To handle in-memory text streams
 import tempfile
@@ -13,364 +11,560 @@ import stat  # For handling file permissions on Windows
 try:
     import pathspec  # For parsing .gitignore files
 except ImportError:
-    pathspec = None  # Will check if pathspec is available
+    pathspec = None  # Will check if pathspec is available later
+
+# --- Helper Functions (mostly unchanged unless noted) ---
 
 def get_language_from_extension(file_path: str) -> str:
     # Mapping of file extensions to Markdown code block language identifiers
     extension_to_language = {
-        '.py': 'python',
-        '.js': 'javascript',
-        '.html': 'html',
-        '.css': 'css',
-        '.java': 'java',
-        '.cpp': 'cpp',
-        '.c': 'c',
-        '.cs': 'csharp',
-        '.rb': 'ruby',
-        '.php': 'php',
-        '.ts': 'typescript',
-        '.json': 'json',
-        '.md': 'markdown',
-        '.xml': 'xml',
-        '.sh': 'bash',
+        '.py': 'python', '.js': 'javascript', '.html': 'html', '.css': 'css',
+        '.java': 'java', '.cpp': 'cpp', '.c': 'c', '.cs': 'csharp',
+        '.rb': 'ruby', '.php': 'php', '.ts': 'typescript', '.json': 'json',
+        '.md': 'markdown', '.xml': 'xml', '.sh': 'bash', '.yaml': 'yaml',
+        '.yml': 'yaml', '.sql': 'sql', '.go': 'go', '.rs': 'rust',
+        '.kt': 'kotlin', '.swift': 'swift', '.pl': 'perl', '.lua': 'lua',
+        # Add more mappings as needed
     }
     _, extension = os.path.splitext(file_path)
-    return extension_to_language.get(extension, 'text')
+    return extension_to_language.get(extension.lower(), 'text') # Use lower() for case-insensitivity
 
-def build_tree_from_included_paths(include_list: list, git_path: str) -> dict:
+# --- Tree Building ---
+
+def build_tree_from_paths(relative_paths: list, git_path: str) -> dict:
+    """Builds a directory tree structure from a list of relative file paths."""
     tree_dict = {}
-    for path in include_list:
-        path = path.replace('\\', '/')
-        parts = path.split('/')
-        current_level = tree_dict
+    sorted_paths = sorted(relative_paths) # Sort for consistent tree structure
 
-        for part in parts[:-1]:  # Directory parts
+    for rel_path in sorted_paths:
+        # Normalize path separators for internal consistency
+        parts = rel_path.replace('\\', '/').split('/')
+        current_level = tree_dict
+        full_path_so_far = git_path
+
+        # Create directory nodes
+        for part in parts[:-1]:
+            full_path_so_far = os.path.join(full_path_so_far, part)
             if part not in current_level:
-                current_level[part] = {'path': '', 'is_dir': True, 'children': {}}
+                current_level[part] = {'path': full_path_so_far, 'is_dir': True, 'children': {}}
+            # Handle cases where a file might have the same name as an already added directory part (unlikely but possible)
+            elif not current_level[part]['is_dir']:
+                 # Keep essential warnings
+                 print(f"Warning: Path conflict detected for {part}. Treating as directory.")
+                 current_level[part]['is_dir'] = True
+                 if 'children' not in current_level[part]:
+                     current_level[part]['children'] = {}
             current_level = current_level[part]['children']
 
-        # Add the file or directory itself
-        name = parts[-1]
-        if name:  # Ensure there's a name to add
-            full_path = os.path.join(git_path, path)
-            is_dir = os.path.isdir(full_path)
-            current_level[name] = {'path': full_path, 'is_dir': is_dir, 'children': {}}
-            # If it's a directory, build its tree
-            if is_dir:
-                build_tree(full_path, current_level[name]['children'], [], git_path)
+        # Add the file node
+        file_name = parts[-1]
+        if file_name: # Ensure there's a filename
+            full_file_path = os.path.join(full_path_so_far, file_name)
+            current_level[file_name] = {'path': full_file_path, 'is_dir': False} # Files don't have children in this context
+
     return tree_dict
 
-def write_tree_to_file_with_included_paths(git_path: str, output_handle, include_list: list):
-    tree_dict = build_tree_from_included_paths(include_list, git_path)
+def write_tree_from_paths(output_handle, tree_dict: dict):
+    """Writes the pre-built tree dictionary to the output handle."""
     tree_str = format_tree(tree_dict)
-    output_handle.write(tree_str.rstrip('\r\n') + '\n\n')
+    output_handle.write("Project Tree:\n")
+    output_handle.write("```\n") # Use a code block for the tree
+    output_handle.write(tree_str.rstrip('\r\n') + '\n')
+    output_handle.write("```\n\n")
 
-def build_tree(directory, tree_dict, ignore_list, git_path, gitignore_spec=None):
+# Modified build_tree to use ignore_spec
+def build_tree(directory, tree_dict, ignore_spec, git_path):
+    """Builds the tree dictionary for general case (no -inc), respecting ignore_spec."""
     try:
         items = os.listdir(directory)
     except PermissionError:
+        # Keep essential warnings
         print(f"Warning: Permission denied: {directory}. Skipping directory.")
         return
-    items.sort()  # Sort the items to have a consistent order
+    except FileNotFoundError:
+        # Keep essential warnings
+        print(f"Warning: Directory not found: {directory}. Skipping.")
+        return
+
+    items.sort()
     for item in items:
         path = os.path.join(directory, item)
-        try:
-            is_dir = os.path.isdir(path)
-            is_file = os.path.isfile(path)
-        except PermissionError:
-            print(f"Warning: Permission denied: {path}. Skipping.")
+        relative_path = os.path.relpath(path, git_path)
+
+        # Always ignore .git
+        if relative_path == '.git' or relative_path.startswith('.git' + os.sep):
             continue
-        if is_dir and not should_ignore(path, ignore_list, git_path, gitignore_spec):
-            tree_dict[item] = {'path': path, 'is_dir': True, 'children': {}}
-            build_tree(path, tree_dict[item]['children'], ignore_list, git_path, gitignore_spec)
-        elif is_file:
-            if not should_ignore(path, ignore_list, git_path, gitignore_spec):
-                tree_dict[item] = {'path': path, 'is_dir': False}
+
+        # Check against ignore spec
+        if ignore_spec and ignore_spec.match_file(relative_path):
+            continue
+        try:
+            # Check dirs with trailing slash, but handle potential errors during isdir check early
+            if os.path.isdir(path):
+                if ignore_spec and ignore_spec.match_file(relative_path + '/'):
+                    continue
+                # If not ignored directory:
+                tree_dict[item] = {'path': path, 'is_dir': True, 'children': {}}
+                build_tree(path, tree_dict[item]['children'], ignore_spec, git_path)
+                # Prune empty directories after recursion
+                if not tree_dict[item]['children']:
+                    del tree_dict[item]
+            # Check if it's a file *after* ignore checks (if it wasn't an ignored dir)
+            elif os.path.isfile(path): # Check only if it's not an ignored dir
+                 tree_dict[item] = {'path': path, 'is_dir': False}
+        except OSError as e: # Handle potential errors like broken symlinks or permission errors during isdir/isfile
+             # Keep essential warnings
+             print(f"Warning: Cannot determine type of or access {path}. Skipping. Error: {e}")
+             continue
+
 
 def format_tree(tree_dict, padding=''):
+    """Formats the tree dictionary into a string representation."""
     lines = ''
     if not tree_dict:
         return lines
-    last_index = len(tree_dict) - 1
-    for index, (name, node) in enumerate(tree_dict.items()):
+    items = list(tree_dict.items())
+    last_index = len(items) - 1
+
+    for index, (name, node) in enumerate(items):
         connector = '└──' if index == last_index else '├──'
+        line_prefix = f"{padding}{connector} "
+        lines += f"{line_prefix}{name}"
+
         if node['is_dir']:
-            lines += f"{padding}{connector} {name}/\n"
+            lines += "/\n"
             new_padding = padding + ("    " if index == last_index else "│   ")
             lines += format_tree(node['children'], new_padding)
         else:
-            lines += f"{padding}{connector} {name}\n"
+            lines += "\n" # Just the filename on the line
+
     return lines
 
-def write_tree_to_file(directory, output_handle, ignore_list, gitignore_spec=None):
+# Modified write_tree_to_file to use ignore_spec
+def write_full_tree_to_file(directory, output_handle, ignore_spec):
+    """Builds and writes the full directory tree, respecting ignores."""
     tree_dict = {}
-    build_tree(directory, tree_dict, ignore_list, directory, gitignore_spec)
+    # REMOVED print("Building directory tree...")
+    build_tree(directory, tree_dict, ignore_spec, directory)
+    # REMOVED print("Formatting tree...")
     tree_str = format_tree(tree_dict)
-    output_handle.write(tree_str.rstrip('\r\n') + '\n\n')  # write the tree followed by two newlines
+    output_handle.write("Project Tree:\n")
+    output_handle.write("```\n") # Use a code block for the tree
+    output_handle.write(tree_str.rstrip('\r\n') + '\n')
+    output_handle.write("```\n\n")
+
+# --- File Processing ---
 
 def append_to_file_markdown_style(relative_path: str, file_content: str, output_handle) -> None:
     language = get_language_from_extension(relative_path)
-    # Write the header with the relative path and the file content wrapped in a code block
-    output_handle.write(f"# File: {relative_path}\n```{language}\n{file_content}\n```\n# End of file: {relative_path}\n\n")
+    relative_path_display = relative_path.replace('\\', '/') # Consistent separators in output
+    output_handle.write(f"# File: {relative_path_display}\n```{language}\n")
+    output_handle.write(file_content)
+     # Ensure final newline if file doesn't end with one, before closing backticks
+    if not file_content.endswith('\n'):
+        output_handle.write('\n')
+    output_handle.write(f"```\n# End of file: {relative_path_display}\n\n")
 
-def should_ignore(path: str, ignore_list: list, git_path: str, gitignore_spec=None) -> bool:
-    relative_path = os.path.relpath(path, git_path)
-    # Always ignore the .git folder
-    if relative_path == '.git' or relative_path.startswith('.git' + os.sep):
-        return True
-    if gitignore_spec:
-        # Append '/' to directories to match gitignore directory patterns
-        match_path = relative_path + '/' if os.path.isdir(path) else relative_path
-        if gitignore_spec.match_file(match_path):
-            return True
-    for pattern in ignore_list:
-        if fnmatch.fnmatch(relative_path, pattern):
-            return True
-    return False
 
-def append_to_single_file(file_path: str, git_path: str, output_handle, skip_empty_files: bool) -> None:
+def append_file_content(full_path: str, git_path: str, output_handle, skip_empty_files: bool) -> None:
+    """Reads a single file and appends its content to the output handle."""
     # Check if the file is empty and should be skipped
-    if skip_empty_files and os.path.getsize(file_path) == 0:
-        print(f'Skipping empty file: {file_path}')
+    try:
+        # Use os.stat to avoid race condition between getsize and open
+        file_stat = os.stat(full_path)
+        if skip_empty_files and file_stat.st_size == 0:
+            # Keep essential warnings/info
+            # print(f'Skipping empty file: {os.path.relpath(full_path, git_path)}')
+            return
+    except OSError as e:
+        # Keep essential warnings
+        print(f'Warning: Cannot get stat of {full_path}. Skipping file. Error: {e}')
         return
 
     # Determine the relative path of the file to use as a header
-    relative_path = os.path.relpath(file_path, start=git_path)
+    relative_path = os.path.relpath(full_path, start=git_path)
 
     # Try to read the file with UTF-8 encoding, skip if it fails
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f: # Use 'replace' for robustness
             file_content = f.read()
-    except UnicodeDecodeError:
-        print(f'Warning: Could not decode {file_path}. Skipping file.')
-        return
     except PermissionError:
-        print(f'Warning: Permission denied: {file_path}. Skipping file.')
+        # Keep essential warnings
+        print(f'Warning: Permission denied: {relative_path}. Skipping file.')
+        return
+    except OSError as e: # Catch other potential file reading errors
+         # Keep essential warnings
+         print(f'Warning: Error reading {relative_path}. Skipping file. Error: {e}')
+         return
+    except Exception as e: # Catch unexpected errors
+        # Keep essential warnings
+        print(f'Warning: Unexpected error reading {relative_path}. Skipping file. Error: {e}')
         return
 
     # Append the content in Markdown style
     append_to_file_markdown_style(relative_path, file_content, output_handle)
 
-def process_path(git_path: str, ignore_list: list, output_handle, skip_empty_files: bool, gitignore_spec=None) -> None:
-    for root, dirs, files in os.walk(git_path, topdown=True, onerror=lambda e: print(f"Warning: {e.strerror}: {e.filename}. Skipping.")):
-        # Apply filtering on the directories
-        dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), ignore_list, git_path, gitignore_spec)]
 
-        for file in files:
-            full_path = os.path.join(root, file)
-            if should_ignore(full_path, ignore_list, git_path, gitignore_spec):
-                print(f'Skipping ignored file: {file}')
+def find_matching_files(git_path: str, include_spec, ignore_spec) -> list:
+    """
+    Walks the directory tree and returns a list of relative paths that
+    match include_spec and do not match ignore_spec.
+    Uses pathspec for matching, mimicking gitignore behavior.
+    """
+    matched_files = []
+    # REMOVED print("Scanning files...")
+    for root, dirs, files in os.walk(git_path, topdown=True):
+        original_dirs = list(dirs)
+        dirs[:] = []
+
+        for d in original_dirs:
+            dir_full_path = os.path.join(root, d)
+            dir_relative_path = os.path.relpath(dir_full_path, git_path).replace('\\', '/')
+
+            if dir_relative_path == '.git' or dir_relative_path.startswith('.git/'):
                 continue
-            append_to_single_file(full_path, git_path, output_handle, skip_empty_files)
 
-def process_include_list(git_path: str, output_handle, skip_empty_files: bool, include_list: list) -> None:
-    for relative_path in include_list:
-        full_path = os.path.join(git_path, relative_path.replace('/', os.sep))  # Ensure platform compatibility
+            try:
+                # Check if the directory itself is ignored (match with trailing slash)
+                # Need to ensure it's actually a directory first to avoid errors on non-dirs
+                # and apply ignore_spec correctly. Check this *before* deciding to descend.
+                is_dir_check = os.path.isdir(dir_full_path) # Check once
+            except OSError:
+                continue # Skip if cannot check type
 
-        if not os.path.exists(full_path):
-            print(f'Warning: Path does not exist: {relative_path}')
-            continue  # Skip non-existing paths
+            if is_dir_check and ignore_spec and ignore_spec.match_file(dir_relative_path + '/'):
+                continue # Don't add to dirs list, os.walk won't descend
 
-        if os.path.isfile(full_path):
-            append_to_single_file(full_path, git_path, output_handle, skip_empty_files)
-        elif os.path.isdir(full_path):
-            # Recursively process directory
-            for root, dirs, files in os.walk(full_path, onerror=lambda e: print(f"Warning: {e.strerror}: {e.filename}. Skipping.")):
-                for file in files:
-                    file_full_path = os.path.join(root, file)
-                    append_to_single_file(file_full_path, git_path, output_handle, skip_empty_files)
-        else:
-            print(f'Warning: Path is neither a file nor a directory: {relative_path}')
+            # If not ignored, allow os.walk to descend into it
+            dirs.append(d)
+
+
+        # Process files in the current directory
+        for file in files:
+            file_full_path = os.path.join(root, file)
+            file_relative_path = os.path.relpath(file_full_path, git_path).replace('\\', '/')
+
+            if file_relative_path.startswith('.git/'):
+                 continue
+
+            # 1. Check if ignored
+            if ignore_spec and ignore_spec.match_file(file_relative_path):
+                continue
+
+            # 2. Check if included (only if include_spec is provided)
+            if include_spec:
+                if include_spec.match_file(file_relative_path):
+                    matched_files.append(file_relative_path)
+            else:
+                 matched_files.append(file_relative_path)
+
+    # REMOVED print(f"Found {len(matched_files)} matching files.")
+    return sorted(matched_files)
+
+# --- Clipboard and Git Handling (mostly unchanged) ---
 
 def copy_to_clipboard_content(content: str) -> None:
     """Copy the given content to the clipboard."""
-    if sys.platform == "win32":
-        # On Windows, use the clip command with UTF-16LE encoding
-        process = subprocess.Popen('clip', stdin=subprocess.PIPE, shell=True)
-        process.communicate(input=content.encode('utf-16le'))
-    elif sys.platform == "darwin":
-        # On macOS, use the pbcopy command with UTF-8 encoding
-        process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE)
-        process.communicate(input=content.encode('utf-8'))
-    elif sys.platform.startswith("linux"):
-        # On Linux, try xclip or xsel
-        try:
-            process = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+    try:
+        if sys.platform == "win32":
+            process = subprocess.Popen('clip', stdin=subprocess.PIPE, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            process.communicate(input=content.encode('utf-16le')) # Windows clip uses UTF-16LE
+        elif sys.platform == "darwin":
+            process = subprocess.Popen('pbcopy', stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             process.communicate(input=content.encode('utf-8'))
-        except FileNotFoundError:
+        elif sys.platform.startswith("linux"):
             try:
-                process = subprocess.Popen(['xsel', '--clipboard', '--input'], stdin=subprocess.PIPE)
+                process = subprocess.Popen(['xclip', '-selection', 'clipboard', '-in'], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 process.communicate(input=content.encode('utf-8'))
             except FileNotFoundError:
-                print("Clipboard functionality requires 'xclip' or 'xsel' to be installed on Linux.")
-    else:
-        print(f"Clipboard functionality is not supported on {sys.platform}.")
+                try:
+                    process = subprocess.Popen(['xsel', '--clipboard', '--input'], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    process.communicate(input=content.encode('utf-8'))
+                except FileNotFoundError:
+                    # Keep essential warnings/errors
+                    print("Clipboard functionality requires 'xclip' or 'xsel'. Please install.")
+        else:
+            # Keep essential warnings/errors
+            print(f"Clipboard functionality not supported on {sys.platform}.")
+    except Exception as e:
+        # Keep essential warnings/errors
+        print(f"Error copying to clipboard: {e}")
 
 def copy_to_clipboard_file(output_file_path: str) -> None:
     """Copy the content of the output file to the clipboard."""
-    with open(output_file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
-    copy_to_clipboard_content(content)
+    try:
+        with open(output_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+        copy_to_clipboard_content(content)
+    except FileNotFoundError:
+        # Keep essential warnings/errors
+        print(f"Error: Output file not found for copying: {output_file_path}")
+    except Exception as e:
+        # Keep essential warnings/errors
+        print(f"Error reading output file for copying: {e}")
+
 
 def is_git_url(path: str) -> bool:
     """Check if the given path is a git URL."""
-    git_url_prefixes = ['http://', 'https://', 'git@', 'ssh://', 'git://']
-    return any(path.startswith(prefix) for prefix in git_url_prefixes)
+    git_url_prefixes = ['http://', 'https://', 'git@', 'ssh://', 'git://', 'file://']
+    return any(path.startswith(prefix) for prefix in git_url_prefixes) or path.endswith('.git')
+
 
 def on_rm_error(func, path, exc_info):
-    """
-    Error handler for shutil.rmtree.
-
-    If the error is due to an access error (read-only file),
-    it attempts to add write permission and then retries.
-
-    If the error is for another reason, it re-raises the error.
-    """
-    if not os.access(path, os.W_OK):
-        # Attempt to add write permission and retry
-        os.chmod(path, stat.S_IWUSR)
-        func(path)
+    """Error handler for shutil.rmtree, attempts to fix permissions on Windows."""
+    if not os.access(path, os.W_OK) and sys.platform == 'win32':
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception as e:
+             # Keep essential warnings/errors
+             print(f"Error: Failed to change permissions or retry deletion for {path}: {e}")
+             raise exc_info[1]
     else:
-        raise
+        raise exc_info[1]
+
+
+# --- Main Execution Logic ---
 
 def main():
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Process some files and directories.')
-    parser.add_argument('path', help='Path to the git project directory or a git repository URL.')
-    parser.add_argument('-o', '--output', help='Output file path.')
-    parser.add_argument('-ig', '--ignore', nargs='*', help='List of files or directories to ignore (supports glob patterns).')
-    parser.add_argument('-inc', '--include', nargs='*', help='List of files or directories to include (supports glob patterns). If specified, only these paths will be included.')
-    parser.add_argument('-se', '--skip-empty-files', action='store_true', help='Skip empty files.')
-    parser.add_argument('-cp', '--clipboard', action='store_true', help='Copy the output file content to clipboard.')
-    parser.add_argument('-igi', '--ignoregitignore', action='store_true', help='Ignore .gitignore and .globalignore files.')
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(
+        description='Consolidate project files into a single text file or clipboard, with Git-like filtering.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        # Keep epilog for help message
+        epilog="""Examples:
+  # Process current directory, output to file, copy to clipboard
+  %(prog)s . -o output.txt -cp
+
+  # Process specific python files recursively, ignoring empty ones
+  %(prog)s . -inc "*.py" --skip-empty-files -o python_code.md
+
+  # Process directory, ignoring logs and build files (like .gitignore)
+  %(prog)s /path/to/project -ig "*.log" -ig "build/" -o project_src.txt
+
+  # Clone a repo, process only JS files, copy to clipboard
+  %(prog)s https://github.com/user/repo.git -inc "**/*.js" -cp
+
+  # Ignore the project's .gitignore file
+  %(prog)s . --ignoregitignore -o everything.txt
+"""
+    )
+    parser.add_argument('path', help='Path to the project directory or a git repository URL.')
+    parser.add_argument('-o', '--output', help='Output file path. If omitted, output goes to clipboard.')
+    parser.add_argument('-ig', '--ignore', nargs='*', default=[], help='List of patterns to ignore (Git-style). Applied after .gitignore.')
+    parser.add_argument('-inc', '--include', nargs='*', default=None, help='List of patterns to include (Git-style). If specified, only matching files are processed.')
+    parser.add_argument('-se', '--skip-empty-files', action='store_true', help='Skip files with zero size.')
+    parser.add_argument('-cp', '--clipboard', action='store_true', help='Copy the output to clipboard. Default if -o is omitted.')
+    parser.add_argument('-igi', '--ignoregitignore', action='store_true', help='Ignore project\'s .gitignore and script\'s .globalignore files.')
     args = parser.parse_args()
 
-    git_path = args.path
-    temp_dir = None  # To keep track if we need to clean up a temp directory
+    # --- Initial Setup ---
+    if pathspec is None and not args.ignoregitignore:
+        # Keep essential errors
+        print("Error: 'pathspec' library is required for Git-style filtering.")
+        print("Install it using 'pip install pathspec'")
+        print("Alternatively, use the --ignoregitignore flag to skip .gitignore processing.")
+        sys.exit(1)
+
+    git_path_arg = args.path
+    temp_dir = None
+    original_dir = os.getcwd()
 
     try:
-        # Check if git_path is a directory
-        if os.path.isdir(git_path):
-            # Proceed as before
-            pass
-        else:
-            # Not a directory; check if it's a git URL
-            if is_git_url(git_path):
-                # Clone the repository to a temporary directory
-                temp_dir = tempfile.mkdtemp()
-                clone_cmd = ['git', 'clone', git_path, temp_dir]
-                try:
-                    subprocess.check_call(clone_cmd)
-                    git_path = temp_dir
-                except subprocess.CalledProcessError as e:
-                    print(f'Error cloning repository: {e}')
-                    sys.exit(1)
-            else:
-                print(f'Path not found or not a directory or a git URL: {git_path}')
+        # --- Handle Path Argument (Local Dir or Git URL) ---
+        if is_git_url(git_path_arg):
+            # REMOVED print(f"Cloning repository: {git_path_arg}")
+            temp_dir = tempfile.mkdtemp(prefix="git2text_")
+            # REMOVED print(f"Cloning into temporary directory: {temp_dir}")
+            # Redirect stdout/stderr of git clone to suppress its output
+            clone_cmd = ['git', 'clone', '--depth', '1', '--quiet', git_path_arg, temp_dir]
+            try:
+                # Use DEVNULL to suppress output, check=True handles errors
+                subprocess.run(clone_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                git_path = temp_dir
+                # REMOVED print("Clone successful.")
+            except subprocess.CalledProcessError as e:
+                 # Keep essential errors
+                print(f'Error cloning repository (ensure URL is correct and you have access): {git_path_arg}')
+                # Stderr might be useful for debugging clone issues
+                # print(f"Stderr: {e.stderr}") # Optional: uncomment for debugging clone errors
+                if temp_dir and os.path.exists(temp_dir):
+                     shutil.rmtree(temp_dir, onerror=on_rm_error)
                 sys.exit(1)
-
-        output_file_provided = False
-        if args.output:
-            output_file_provided = True
-            output_file_path = args.output
-        else:
-            output_file_path = None  # No output file by default
-
-        ignore_list = args.ignore if args.ignore is not None else []
-        include_list = args.include if args.include is not None else None
-        skip_empty_files = args.skip_empty_files
-
-        gitignore_spec = None
-        if not args.ignoregitignore:
-            if pathspec is None:
-                print("Error: 'pathspec' module is required to parse the .gitignore and .globalignore files.")
-                print("Install it using 'pip install pathspec' or add the -igi flag to ignore .gitignore and .globalignore.")
+            except FileNotFoundError:
+                 # Keep essential errors
+                print("Error: 'git' command not found. Please ensure Git is installed and in your PATH.")
+                if temp_dir and os.path.exists(temp_dir):
+                     shutil.rmtree(temp_dir, onerror=on_rm_error)
                 sys.exit(1)
-            gitignore_patterns = []
+        elif os.path.isdir(git_path_arg):
+            git_path = os.path.abspath(git_path_arg)
+            # REMOVED print(f"Processing directory: {git_path}")
+        else:
+            # Keep essential errors
+            print(f'Error: Path not found or not a valid directory/git URL: {git_path_arg}')
+            sys.exit(1)
 
-            # Read .gitignore file in git_path
+        os.chdir(git_path)
+
+        # --- Build Ignore Specification ---
+        all_ignore_patterns = []
+        ignore_spec = None
+
+        if not args.ignoregitignore and pathspec:
             gitignore_path = os.path.join(git_path, '.gitignore')
             if os.path.exists(gitignore_path):
-                with open(gitignore_path, 'r') as f:
-                    gitignore_patterns.extend(f.read().splitlines())
-            # else:
-            #    print(f'Warning: .gitignore file not found in {git_path}')
+                try:
+                    with open(gitignore_path, 'r', encoding='utf-8') as f:
+                        # REMOVED print("Reading .gitignore")
+                        all_ignore_patterns.extend(f.read().splitlines())
+                except Exception as e:
+                     # Keep essential warnings
+                    print(f"Warning: Could not read .gitignore: {e}")
 
-            # Read .globalignore file in script directory
-            script_dir = os.path.dirname(os.path.realpath(__file__))
+            script_dir = os.path.dirname(os.path.realpath(sys.argv[0])) # Use sys.argv[0] for script path
             globalignore_path = os.path.join(script_dir, '.globalignore')
             if os.path.exists(globalignore_path):
-                with open(globalignore_path, 'r') as f:
-                    gitignore_patterns.extend(f.read().splitlines())
-            else:
-                print(f'Warning: .globalignore file not found in {script_dir}')
+                 try:
+                    with open(globalignore_path, 'r', encoding='utf-8') as f:
+                         # REMOVED print("Reading .globalignore")
+                         all_ignore_patterns.extend(f.read().splitlines())
+                 except Exception as e:
+                      # Keep essential warnings
+                     print(f"Warning: Could not read .globalignore: {e}")
 
-            if gitignore_patterns:
-                gitignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', gitignore_patterns)
-        else:
-            print("Ignoring .gitignore and .globalignore files as per the --ignoregitignore flag.")
+        if args.ignore:
+            # REMOVED print(f"Adding command line ignore patterns: {args.ignore}")
+            all_ignore_patterns.extend(args.ignore)
 
-        # Determine the writing mode based on whether an output file is provided
-        if output_file_path:
-            # Ensure the output directory exists
+        if all_ignore_patterns and pathspec:
+            try:
+                 cleaned_patterns = [p for p in all_ignore_patterns if p.strip() and not p.strip().startswith('#')]
+                 ignore_spec = pathspec.PathSpec.from_lines('gitwildmatch', cleaned_patterns)
+                 # REMOVED print(f"Compiled {len(cleaned_patterns)} ignore patterns.")
+            except Exception as e:
+                # Keep essential errors
+                print(f"Error creating ignore specification: {e}")
+                sys.exit(1)
+        # REMOVED elif args.ignoregitignore: print("Ignoring .gitignore, .globalignore files as requested.")
+
+
+        # --- Build Include Specification (if -inc provided) ---
+        include_spec = None
+        if args.include is not None:
+             if not args.include:
+                  # Keep essential warnings
+                 print("Warning: -inc flag provided with no patterns. No files will be included.")
+                 if pathspec:
+                      include_spec = pathspec.PathSpec.from_lines('gitwildmatch', [])
+             elif pathspec:
+                 # REMOVED print(f"Using include patterns: {args.include}")
+                 try:
+                     cleaned_patterns = [p for p in args.include if p.strip() and not p.strip().startswith('#')]
+                     include_spec = pathspec.PathSpec.from_lines('gitwildmatch', cleaned_patterns)
+                     # REMOVED print(f"Compiled {len(cleaned_patterns)} include patterns.")
+                 except Exception as e:
+                      # Keep essential errors
+                     print(f"Error creating include specification: {e}")
+                     sys.exit(1)
+             else:
+                  # Keep essential errors (already checked pathspec earlier, but defensive)
+                 print("Error: pathspec needed for --include but not found.")
+                 sys.exit(1)
+
+
+        # --- Find Files to Process ---
+        files_to_process = find_matching_files(git_path, include_spec, ignore_spec)
+        total_files = len(files_to_process) # Get count here
+
+
+        # --- Determine Output Mode (File or Clipboard) ---
+        # REMOVED output_target_description = ""
+        output_to_file = args.output is not None
+        copy_to_clip = args.clipboard or not output_to_file
+
+        if output_to_file:
+            output_file_path = os.path.abspath(args.output)
+            # REMOVED output_target_description = f"file: {output_file_path}"
             output_dir = os.path.dirname(output_file_path)
-            if output_dir and not os.path.exists(output_dir):
-                os.makedirs(output_dir, exist_ok=True)
-
-            # Open the output file for writing
-            with open(output_file_path, 'w', encoding='utf-8') as output_file:
-                if include_list is not None:
-                    # Use glob to expand patterns
-                    expanded_include_list = []
-                    for pattern in include_list:
-                        matched_paths = glob.glob(os.path.join(git_path, pattern), recursive=True)
-                        expanded_include_list.extend([os.path.relpath(p, git_path) for p in matched_paths])
-                    include_list = expanded_include_list
-
-                    # Since include_list is specified, ignore the ignore_list
-                    write_tree_to_file_with_included_paths(git_path, output_file, include_list)
-                    process_include_list(git_path, output_file, skip_empty_files, include_list)
-                else:
-                    # Use ignore patterns
-                    write_tree_to_file(git_path, output_file, ignore_list, gitignore_spec)
-                    process_path(git_path, ignore_list, output_file, skip_empty_files, gitignore_spec)
-
-                # If the flag --clipboard is set, copy the output to the clipboard
-                if args.clipboard:
-                    copy_to_clipboard_file(output_file_path)
-                    print(f"The content of {output_file_path} has been copied to the clipboard.")
-                
-                print(f"All contents have been written to: {output_file_path}")
+            if output_dir:
+                 try:
+                     os.makedirs(output_dir, exist_ok=True)
+                 except OSError as e:
+                     # Keep essential errors
+                     print(f"Error creating output directory {output_dir}: {e}")
+                     sys.exit(1)
+            try:
+                output_handle = open(output_file_path, 'w', encoding='utf-8')
+            except OSError as e:
+                 # Keep essential errors
+                 print(f"Error opening output file {output_file_path} for writing: {e}")
+                 sys.exit(1)
         else:
-            # No output file provided; collect content in-memory and copy to clipboard by default
-            output_buffer = io.StringIO()
-            if include_list is not None:
-                # Use glob to expand patterns
-                expanded_include_list = []
-                for pattern in include_list:
-                    matched_paths = glob.glob(os.path.join(git_path, pattern), recursive=True)
-                    expanded_include_list.extend([os.path.relpath(p, git_path) for p in matched_paths])
-                include_list = expanded_include_list
+            # REMOVED output_target_description = "clipboard"
+            output_handle = io.StringIO()
+            output_file_path = None
 
-                # Since include_list is specified, ignore the ignore_list
-                write_tree_to_file_with_included_paths(git_path, output_buffer, include_list)
-                process_include_list(git_path, output_buffer, skip_empty_files, include_list)
+
+        # --- Write Output ---
+        try:
+            # REMOVED print(f"Writing output to {output_target_description}...")
+
+            if files_to_process:
+                 tree_dict = build_tree_from_paths(files_to_process, git_path)
+                 write_tree_from_paths(output_handle, tree_dict)
             else:
-                # Use ignore patterns
-                write_tree_to_file(git_path, output_buffer, ignore_list, gitignore_spec)
-                process_path(git_path, ignore_list, output_buffer, skip_empty_files, gitignore_spec)
+                 # Keep potentially useful info if nothing happens
+                 print("No files matched the criteria. Skipping tree generation and file content.")
+                 output_handle.write("No files matched the specified criteria.\n\n")
 
-            # Get the content from the buffer
-            content = output_buffer.getvalue()
-            output_buffer.close()
+            for i, rel_path in enumerate(files_to_process):
+                full_path = os.path.join(git_path, rel_path)
+                # REMOVED print(f"Processing [{i+1}/{total_files}]: {rel_path}")
+                append_file_content(full_path, git_path, output_handle, args.skip_empty_files)
 
-            # Copy the content to the clipboard
-            copy_to_clipboard_content(content)
-            print("The content has been copied to the clipboard.")
+            # --- Finalize Output ---
+            if output_to_file:
+                output_handle.close()
+                # REMOVED print(f"Successfully wrote output to: {output_file_path}")
+                if copy_to_clip:
+                    # REMOVED print("Copying file content to clipboard...")
+                    copy_to_clipboard_file(output_file_path)
+                    # MODIFIED Success Message
+                    print(f"{total_files} files copied to clipboard.")
+                # else: # No output if not copying to clipboard
+                #    pass
+            else: # Output was to buffer
+                content = output_handle.getvalue()
+                output_handle.close()
+                if copy_to_clip:
+                    # REMOVED print("Copying content to clipboard...")
+                    copy_to_clipboard_content(content)
+                     # MODIFIED Success Message
+                    print(f"{total_files} files copied to clipboard.")
+                # else: # Logic ensures copy_to_clip is true here, no need for else
+
+
+        except Exception as e:
+             # Keep essential errors
+             print(f"\nError during writing/processing: {e}")
+             if output_to_file and 'output_handle' in locals() and not output_handle.closed:
+                 output_handle.close()
+             import traceback
+             traceback.print_exc()
+             sys.exit(1)
+
     finally:
-        # Clean up the temporary directory if we cloned a repo
+        # --- Cleanup ---
+        os.chdir(original_dir)
         if temp_dir:
-            shutil.rmtree(temp_dir, onerror=on_rm_error)
+            # REMOVED print(f"Cleaning up temporary directory: {temp_dir}")
+            try:
+                shutil.rmtree(temp_dir, onerror=on_rm_error)
+            except Exception as e:
+                 # Keep essential warnings/errors
+                 print(f"Warning: Failed to completely remove temporary directory {temp_dir}: {e}")
+
 
 if __name__ == '__main__':
     main()
