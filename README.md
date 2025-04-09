@@ -20,6 +20,14 @@ Git2Text is a utility that simplifies the process of extracting and formatting t
 - **Git** (for cloning remote repositories)
 - **`xclip` or `xsel` for Clipboard Support on Linux**: If you are using Linux and want clipboard functionality, you need to have either `xclip` or `xsel` installed.
 
+### Verifying System Requirements
+
+Before installation, you can run the system verification script to ensure your environment is properly configured:
+
+```bash
+python environment-checker.py
+```
+
 ## Installation
 
 1. Clone the repository:
