@@ -444,6 +444,32 @@ class TestGit2Text(unittest.TestCase):
             git2text.main()
         self.assertEqual(cm.exception.code, 1)
 
+
+    # Patch gettext for consistency
+    @patch('gettext.translation', return_value=NullTranslations())
+    @patch('tempfile.mkdtemp', return_value='/tmp/git2text_test_clone_fail')
+    @patch('shutil.rmtree')
+    @patch('builtins.print')
+    @patch('subprocess.run')
+    def test_main_git_clone_error_shows_git_stderr(self, mock_subprocess_run, mock_print, mock_rmtree, mock_mkdtemp, mock_gettext):
+        """Test clone failures show stderr and avoid duplicate cleanup warnings."""
+        mock_subprocess_run.side_effect = subprocess.CalledProcessError(
+            returncode=128,
+            cmd=['git', 'clone'],
+            stderr="fatal: repository not found"
+        )
+
+        with patch('os.path.exists', return_value=True):
+            sys.argv = ["git2text.py", "https://github.com/example/missing-repo.git", "-o", "out.md"]
+            with self.assertRaises(SystemExit) as cm:
+                git2text.main()
+
+        self.assertEqual(cm.exception.code, 1)
+        printed = "\n".join(str(args[0]) for args, _ in mock_print.call_args_list if args)
+        self.assertIn("Error cloning repository", printed)
+        self.assertIn("Git error: fatal: repository not found", printed)
+        mock_rmtree.assert_called_once_with('/tmp/git2text_test_clone_fail', onerror=git2text.on_rm_error)
+
     @patch('git2text.pathspec', None) # Simulate pathspec not being installed
     @patch('gettext.translation', return_value=NullTranslations()) # Still need gettext patch
     def test_main_no_pathspec_and_gitignore_required(self, mock_gettext):
