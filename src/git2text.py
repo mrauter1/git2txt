@@ -312,7 +312,7 @@ def is_git_url(path: str) -> bool:
 
 def on_rm_error(func, path, exc_info):
     """Error handler for shutil.rmtree, attempts to fix permissions on Windows."""
-    if not os.access(path, os.W_OK) and sys.platform == 'win32':
+    if sys.platform == 'win32' and not os.access(path, os.W_OK):
         try:
             os.chmod(path, stat.S_IWRITE)
             func(path)
@@ -380,22 +380,26 @@ def main():
             clone_cmd = ['git', 'clone', '--depth', '1', '--quiet', git_path_arg, temp_dir]
             try:
                 # Use DEVNULL to suppress output, check=True handles errors
-                subprocess.run(clone_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(clone_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
                 git_path = temp_dir
                 # REMOVED print("Clone successful.")
             except subprocess.CalledProcessError as e:
                  # Keep essential errors
                 print(f'Error cloning repository (ensure URL is correct and you have access): {git_path_arg}')
-                # Stderr might be useful for debugging clone issues
-                # print(f"Stderr: {e.stderr}") # Optional: uncomment for debugging clone errors
+                if getattr(e, 'stderr', None):
+                    err = str(e.stderr).strip()
+                    if err:
+                        print(f"Git error: {err}")
                 if temp_dir and os.path.exists(temp_dir):
                      shutil.rmtree(temp_dir, onerror=on_rm_error)
+                     temp_dir = None
                 sys.exit(1)
             except FileNotFoundError:
                  # Keep essential errors
                 print("Error: 'git' command not found. Please ensure Git is installed and in your PATH.")
                 if temp_dir and os.path.exists(temp_dir):
                      shutil.rmtree(temp_dir, onerror=on_rm_error)
+                     temp_dir = None
                 sys.exit(1)
         elif os.path.isdir(git_path_arg):
             git_path = os.path.abspath(git_path_arg)
